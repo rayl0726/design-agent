@@ -27,15 +27,18 @@ public class WorkflowService {
     private final WorkflowLogRepository logRepository;
     private final WorkflowEngine workflowEngine;
     private final WebClient webClient;
+    private final SessionMessageService sessionMessageService;
 
     public WorkflowService(ProjectRepository projectRepository,
                            WorkflowLogRepository logRepository,
                            WorkflowEngine workflowEngine,
                            WebClient.Builder webClientBuilder,
+                           SessionMessageService sessionMessageService,
                            @Value("${agent-core.base-url:http://localhost:8000}") String agentCoreBaseUrl) {
         this.projectRepository = projectRepository;
         this.logRepository = logRepository;
         this.workflowEngine = workflowEngine;
+        this.sessionMessageService = sessionMessageService;
         this.webClient = webClientBuilder.baseUrl(agentCoreBaseUrl).build();
     }
 
@@ -177,16 +180,19 @@ public class WorkflowService {
             project.setL1OutputJson(toJson(result.get("concept_design")));
             project.setCurrentLevel("L1");
             project.setStatus("L1_PENDING");
+            sessionMessageService.addAssistantMessage(projectId, "idea_gallery", project.getL1OutputJson());
         }
         if (result.containsKey("visual_design")) {
             project.setL2OutputJson(toJson(result.get("visual_design")));
             project.setCurrentLevel("L2");
             project.setStatus("L2_PENDING");
+            sessionMessageService.addAssistantMessage(projectId, "visual_scheme", project.getL2OutputJson());
         }
         if (result.containsKey("technical_design")) {
             project.setL3OutputJson(toJson(result.get("technical_design")));
             project.setCurrentLevel("L3");
             project.setStatus("L3_PENDING");
+            sessionMessageService.addAssistantMessage(projectId, "proposal", project.getL3OutputJson());
         }
         if (result.containsKey("doc_generate")) {
             project.setStatus("COMPLETED");
