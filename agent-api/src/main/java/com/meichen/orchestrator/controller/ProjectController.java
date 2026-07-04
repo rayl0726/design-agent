@@ -113,17 +113,6 @@ public class ProjectController {
         }
 
         Project project = workflowService.createProject(name, description, inputs);
-
-        // 创建项目后自动异步启动工作流
-        new Thread(() -> {
-            try {
-                Thread.sleep(1000);
-                workflowService.startWorkflow(project.getId(), "L3");
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }).start();
-
         return ResponseEntity.ok(project);
     }
 
