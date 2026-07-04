@@ -26,6 +26,15 @@ public class Project {
     @Column(length = 10)
     private String currentLevel;
 
+    @Column(length = 30)
+    private String currentStage;
+
+    @Column(name = "selected_idea_index")
+    private Integer selectedIdeaIndex;
+
+    @Column(name = "requirement_json", columnDefinition = "TEXT")
+    private String requirementJson;
+
     @Column(columnDefinition = "TEXT")
     private String rawInputsJson;
 
@@ -69,6 +78,15 @@ public class Project {
 
     public String getCurrentLevel() { return currentLevel; }
     public void setCurrentLevel(String currentLevel) { this.currentLevel = currentLevel; }
+
+    public String getCurrentStage() { return currentStage; }
+    public void setCurrentStage(String currentStage) { this.currentStage = currentStage; }
+
+    public Integer getSelectedIdeaIndex() { return selectedIdeaIndex; }
+    public void setSelectedIdeaIndex(Integer selectedIdeaIndex) { this.selectedIdeaIndex = selectedIdeaIndex; }
+
+    public String getRequirementJson() { return requirementJson; }
+    public void setRequirementJson(String requirementJson) { this.requirementJson = requirementJson; }
 
     public String getRawInputsJson() { return rawInputsJson; }
     public void setRawInputsJson(String rawInputsJson) { this.rawInputsJson = rawInputsJson; }
