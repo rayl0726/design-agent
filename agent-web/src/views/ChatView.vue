@@ -21,6 +21,19 @@
 
     <main class="chat-main">
       <div ref="messageList" class="message-list">
+        <div v-if="messages.length === 0" class="welcome-message">
+          <div class="welcome-bubble">
+            <h2>你好，我是你的美陈设计助手</h2>
+            <p>请告诉我：</p>
+            <ul>
+              <li>项目主题（如：夏日海洋、新春国潮）</li>
+              <li>空间类型（购物中心 / 百货 / 快闪店 / 展厅等）</li>
+              <li>预算区间</li>
+              <li>涉及哪些点位？每个点位需要几个？</li>
+            </ul>
+            <p class="welcome-hint">我会基于你的需求生成 10 个创意方向。</p>
+          </div>
+        </div>
         <div
           v-for="msg in messages"
           :key="msg.id"
@@ -255,6 +268,40 @@ watch(() => route.params.id, (newId) => {
   font-size: 14px;
   line-height: 1.6;
   white-space: pre-wrap;
+}
+.welcome-message {
+  display: flex;
+  justify-content: center;
+  padding: 40px 0;
+}
+.welcome-bubble {
+  max-width: 640px;
+  padding: 24px 32px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  text-align: center;
+}
+.welcome-bubble h2 {
+  margin: 0 0 16px;
+  font-size: 20px;
+  color: #303133;
+}
+.welcome-bubble p {
+  margin: 8px 0;
+  color: #606266;
+}
+.welcome-bubble ul {
+  text-align: left;
+  color: #606266;
+  line-height: 1.8;
+  margin: 12px 0;
+  padding-left: 24px;
+}
+.welcome-hint {
+  margin-top: 16px;
+  color: #909399;
+  font-size: 13px;
 }
 .chat-input-area {
   display: flex;
