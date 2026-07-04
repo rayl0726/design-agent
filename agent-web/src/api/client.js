@@ -18,3 +18,8 @@ export const projectApi = {
   reject: (id, level, feedback) =>
     client.post(`/projects/${id}/workflow/confirm`, { level, feedback, approved: false }),
 }
+
+export const messageApi = {
+  list: (sessionId) => client.get(`/projects/${sessionId}/messages`),
+  send: (sessionId, content) => client.post(`/projects/${sessionId}/messages`, { content }),
+}
