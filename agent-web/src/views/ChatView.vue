@@ -29,7 +29,11 @@
         >
           <div class="message-bubble">
             <div class="message-role">{{ msg.role === 'user' ? '你' : 'AI 助手' }}</div>
-            <div class="message-content">{{ msg.content }}</div>
+            <div class="message-content">
+              <TextMessage v-if="msg.messageType === 'text' || msg.messageType === 'summary'" :content="msg.content" />
+              <IdeaGallery v-else-if="msg.messageType === 'idea_gallery'" :ideas="parseJson(msg.content)" @select="handleSelectIdea" />
+              <pre v-else>{{ msg.content }}</pre>
+            </div>
           </div>
         </div>
       </div>
@@ -53,6 +57,8 @@ import { ref, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { projectApi, messageApi } from '../api/client.js'
 import { ElMessage } from 'element-plus'
+import TextMessage from '../components/chat/TextMessage.vue'
+import IdeaGallery from '../components/chat/IdeaGallery.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -118,6 +124,19 @@ const sendMessage = async () => {
   } finally {
     sending.value = false
   }
+}
+
+const parseJson = (str) => {
+  try {
+    return JSON.parse(str)
+  } catch (e) {
+    return []
+  }
+}
+
+const handleSelectIdea = (index) => {
+  inputText.value = `基于第 ${index + 1} 个创意继续生成视觉方案`
+  sendMessage()
 }
 
 const goSession = (id) => {
