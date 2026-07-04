@@ -1,0 +1,31 @@
+Metadata-Version: 2.4
+Name: meichen-ai
+Version: 0.1.0
+Summary: 美陈设计 AI Agent 服务
+Requires-Python: >=3.9
+Requires-Dist: fastapi>=0.111.0
+Requires-Dist: uvicorn[standard]>=0.30.0
+Requires-Dist: pydantic>=2.7.0
+Requires-Dist: pydantic-settings>=2.3.0
+Requires-Dist: sqlalchemy>=2.0.0
+Requires-Dist: alembic>=1.13.0
+Requires-Dist: pymilvus>=2.4.0
+Requires-Dist: httpx>=0.27.0
+Requires-Dist: pillow>=10.3.0
+Requires-Dist: jinja2>=3.1.0
+Requires-Dist: python-pptx>=0.6.23
+Requires-Dist: weasyprint>=62.0
+Requires-Dist: pdfplumber>=0.11.0
+Requires-Dist: pymupdf>=1.24.0
+Requires-Dist: ezdxf>=1.3.0
+Requires-Dist: opencv-python-headless>=4.9.0
+Requires-Dist: numpy>=1.26.0
+Requires-Dist: requests>=2.32.0
+Requires-Dist: beautifulsoup4>=4.12.0
+Requires-Dist: playwright>=1.45.0
+Requires-Dist: click>=8.1.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.2.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23.0; extra == "dev"
+Requires-Dist: ruff>=0.4.0; extra == "dev"
+Requires-Dist: mypy>=1.10.0; extra == "dev"

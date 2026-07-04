@@ -1,0 +1,46 @@
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
+from app.api.routers import router as api_router
+from app.core.config import settings
+from app.models.database import init_db
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(
+    title="美陈设计 AI Agent",
+    description="美陈设计师的 AI 辅助出案系统",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(api_router)
+
+# 静态文件服务（预览生成的 HTML 和图片）
+app.mount("/data", StaticFiles(directory="data"), name="data")
+
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
+
+@app.get("/")
+async def root():
+    return {"message": "美陈设计 AI Agent 服务运行中", "version": "0.1.0"}

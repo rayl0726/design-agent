@@ -1,0 +1,28 @@
+server:
+  port: ${JAVA_ORCHESTRATOR_PORT:8080}
+
+spring:
+  application:
+    name: meichen-orchestrator
+  datasource:
+    url: jdbc:mysql://localhost:3306/meichen?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: meichen
+    password: meichen123
+  jpa:
+    database-platform: org.hibernate.dialect.MySQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+agent-core:
+  base-url: http://${AGENT_CORE_HOST:localhost}:${AGENT_CORE_PORT:8000}
+
+logging:
+  level:
+    com.meichen.orchestrator: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
