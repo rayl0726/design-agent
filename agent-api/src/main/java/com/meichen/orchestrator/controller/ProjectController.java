@@ -1,7 +1,9 @@
 package com.meichen.orchestrator.controller;
 
 import com.meichen.orchestrator.entity.Project;
+import com.meichen.orchestrator.entity.SessionMessage;
 import com.meichen.orchestrator.repository.ProjectRepository;
+import com.meichen.orchestrator.service.SessionMessageService;
 import com.meichen.orchestrator.service.WorkflowService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -15,10 +17,14 @@ public class ProjectController {
 
     private final WorkflowService workflowService;
     private final ProjectRepository projectRepository;
+    private final SessionMessageService sessionMessageService;
 
-    public ProjectController(WorkflowService workflowService, ProjectRepository projectRepository) {
+    public ProjectController(WorkflowService workflowService,
+                             ProjectRepository projectRepository,
+                             SessionMessageService sessionMessageService) {
         this.workflowService = workflowService;
         this.projectRepository = projectRepository;
+        this.sessionMessageService = sessionMessageService;
     }
 
     @GetMapping
@@ -149,6 +155,24 @@ public class ProjectController {
         return projectRepository.findById(projectId)
             .map(ResponseEntity::ok)
             .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/{id}/messages")
+    public ResponseEntity<List<SessionMessage>> listMessages(@PathVariable("id") String projectId) {
+        return ResponseEntity.ok(sessionMessageService.listMessages(projectId));
+    }
+
+    @PostMapping("/{id}/messages")
+    public ResponseEntity<SessionMessage> addMessage(
+        @PathVariable("id") String projectId,
+        @RequestBody Map<String, Object> body
+    ) {
+        String content = (String) body.get("content");
+        if (content == null || content.isBlank()) {
+            throw new IllegalArgumentException("content is required");
+        }
+        SessionMessage msg = sessionMessageService.addUserMessage(projectId, content);
+        return ResponseEntity.ok(msg);
     }
 
     @GetMapping("/{id}/status")
