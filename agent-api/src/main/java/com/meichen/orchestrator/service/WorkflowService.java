@@ -54,6 +54,14 @@ public class WorkflowService {
     }
 
     @Transactional
+    public void deleteProject(String projectId) {
+        Project project = projectRepository.findById(projectId)
+            .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+        sessionMessageService.addSystemMessage(projectId, "会话已删除");
+        projectRepository.delete(project);
+    }
+
+    @Transactional
     public void startWorkflow(String projectId, String targetLevel) {
         Project project = projectRepository.findById(projectId)
             .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));

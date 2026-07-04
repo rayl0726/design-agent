@@ -157,6 +157,12 @@ public class ProjectController {
             .orElse(ResponseEntity.notFound().build());
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, String>> deleteProject(@PathVariable("id") String projectId) {
+        workflowService.deleteProject(projectId);
+        return ResponseEntity.ok(Map.of("status", "deleted", "project_id", projectId));
+    }
+
     @GetMapping("/{id}/messages")
     public ResponseEntity<List<SessionMessage>> listMessages(@PathVariable("id") String projectId) {
         return ResponseEntity.ok(sessionMessageService.listMessages(projectId));
