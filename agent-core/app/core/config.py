@@ -13,6 +13,18 @@ class Settings(BaseSettings):
     ollama_vlm_model: str = "qwen2.5vl"
     ollama_embedding_model: str = "bge-m3"
 
+    # 智谱 AI (GLM) API 配置
+    llm_provider: str = "zhipu"  # "zhipu" | "ollama"
+    zhipu_api_key: str = ""
+    zhipu_base_url: str = "https://open.bigmodel.cn/api/paas/v4"
+    zhipu_model: str = "glm-4-flash"
+    zhipu_vlm_model: str = "glm-4v-flash"
+    zhipu_embedding_model: str = "embedding-3"
+
+    # 模型服务选择：zhipu | ollama
+    vlm_provider: str = "zhipu"  # "zhipu" | "ollama"
+    embedding_provider: str = "zhipu"  # "zhipu" | "ollama"
+
     milvus_host: str = "localhost"
     milvus_port: int = 19530
     milvus_collection_cases: str = "case_descriptions"

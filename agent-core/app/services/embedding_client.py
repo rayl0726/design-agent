@@ -1,6 +1,7 @@
 import hashlib
 import json
 from pathlib import Path
+from typing import Optional, Protocol
 
 import httpx
 import numpy as np
@@ -8,26 +9,21 @@ import numpy as np
 from app.core.config import settings
 
 
-class EmbeddingClient:
+class EmbeddingProvider(Protocol):
+    async def embed(self, text: str) -> list[float]: ...
+
+
+class OllamaEmbeddingProvider:
     def __init__(
         self,
         base_url: str = settings.ollama_base_url,
         model: str = settings.ollama_embedding_model,
-        cache_dir: str = settings.image_cache_dir,
     ):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.client = httpx.AsyncClient(timeout=httpx.Timeout(120.0))
-        self.cache_dir = Path(cache_dir).parent / "embeddings"
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def _cache_key(self, text: str) -> str:
-        return hashlib.md5(text.encode("utf-8")).hexdigest()
-
-    def _cache_path(self, key: str) -> Path:
-        return self.cache_dir / f"{key}.json"
-
-    async def _fetch(self, text: str) -> list[float]:
+    async def embed(self, text: str) -> list[float]:
         payload = {"model": self.model, "prompt": text}
         resp = await self.client.post(f"{self.base_url}/api/embeddings", json=payload)
         resp.raise_for_status()
@@ -37,6 +33,69 @@ class EmbeddingClient:
             raise ValueError(f"Ollama returned empty embedding for: {text[:50]}...")
         return embedding
 
+
+class ZhipuEmbeddingProvider:
+    """智谱 Embedding-3 客户端，兼容 OpenAI 接口。"""
+
+    def __init__(
+        self,
+        api_key: str = settings.zhipu_api_key,
+        base_url: str = settings.zhipu_base_url,
+        model: str = settings.zhipu_embedding_model,
+    ):
+        self.api_key = api_key
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+        self.client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
+
+    async def embed(self, text: str) -> list[float]:
+        payload = {
+            "model": self.model,
+            "input": text,
+        }
+        try:
+            resp = await self.client.post(
+                f"{self.base_url}/embeddings",
+                json=payload,
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                timeout=60.0,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            embedding = data.get("data", [{}])[0].get("embedding")
+            if not embedding:
+                raise ValueError(f"Zhipu returned empty embedding for: {text[:50]}...")
+            return embedding
+        except httpx.HTTPStatusError as e:
+            print(f"Zhipu Embedding HTTP error: {e.response.status_code} - {e.response.text[:300]}")
+            raise
+        except Exception as e:
+            print(f"Zhipu Embedding call failed: {type(e).__name__}: {e}")
+            raise
+
+
+class EmbeddingClient:
+    def __init__(
+        self,
+        provider: Optional[EmbeddingProvider] = None,
+        cache_dir: str = settings.image_cache_dir,
+    ):
+        self.provider = provider or self._default_provider()
+        self.cache_dir = Path(cache_dir).parent / "embeddings"
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+    def _default_provider(self) -> EmbeddingProvider:
+        provider = settings.embedding_provider.lower()
+        if provider == "zhipu":
+            return ZhipuEmbeddingProvider()
+        return OllamaEmbeddingProvider()
+
+    def _cache_key(self, text: str) -> str:
+        return hashlib.md5(text.encode("utf-8")).hexdigest()
+
+    def _cache_path(self, key: str) -> Path:
+        return self.cache_dir / f"{key}.json"
+
     async def embed(self, text: str, use_cache: bool = True) -> list[float]:
         if use_cache:
             key = self._cache_key(text)
@@ -45,7 +104,7 @@ class EmbeddingClient:
                 with open(cache_file, "r", encoding="utf-8") as f:
                     return json.load(f)
 
-        embedding = await self._fetch(text)
+        embedding = await self.provider.embed(text)
 
         if use_cache:
             key = self._cache_key(text)

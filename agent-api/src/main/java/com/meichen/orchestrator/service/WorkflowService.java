@@ -50,7 +50,17 @@ public class WorkflowService {
         project.setDescription(description);
         project.setStatus("INIT");
         project.setRawInputsJson(toJson(inputs));
-        return projectRepository.save(project);
+        project = projectRepository.save(project);
+
+        String greeting = "你好！我是你的美陈设计助手。\n"
+            + "请告诉我：\n"
+            + "• 项目主题（如：夏日海洋、新春国潮）\n"
+            + "• 空间类型（购物中心 / 百货 / 快闪店 / 展厅等）\n"
+            + "• 预算区间\n"
+            + "• 涉及哪些点位？每个点位需要几个？";
+        sessionMessageService.addAssistantMessage(project.getId(), "text", greeting);
+
+        return project;
     }
 
     @Transactional

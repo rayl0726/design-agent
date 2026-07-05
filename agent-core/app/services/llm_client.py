@@ -103,9 +103,26 @@ class OllamaProvider(LLMProvider):
                     continue
 
 
-class LLMClient:
-    def __init__(self, provider: LLMProvider | None = None):
-        self.provider = provider or OllamaProvider()
+class ZhipuProvider(LLMProvider):
+    """智谱 AI (GLM) API Provider，兼容 OpenAI 接口格式。"""
+
+    def __init__(
+        self,
+        api_key: str = settings.zhipu_api_key,
+        base_url: str = settings.zhipu_base_url,
+        model: str = settings.zhipu_model,
+    ):
+        self.api_key = api_key
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+        self.client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
+
+    def _build_messages(self, system_prompt: str, user_prompt: str) -> list[dict]:
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": user_prompt})
+        return messages
 
     async def complete(
         self,
@@ -114,7 +131,35 @@ class LLMClient:
         json_mode: bool = False,
         temperature: float = 0.7,
     ) -> str:
-        return await self.provider.complete(system_prompt, user_prompt, json_mode, temperature)
+        payload: dict = {
+            "model": self.model,
+            "messages": self._build_messages(system_prompt, user_prompt),
+            "stream": False,
+            "temperature": temperature,
+        }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
+
+        try:
+            resp = await self.client.post(
+                f"{self.base_url}/chat/completions",
+                json=payload,
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                timeout=60.0,
+            )
+            print(f"DEBUG: Zhipu response status: {resp.status_code}")
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        except httpx.HTTPStatusError as e:
+            print(f"Zhipu HTTP error: {e.response.status_code} - {e.response.text[:300]}")
+            return ""
+        except httpx.TimeoutException as e:
+            print(f"Zhipu timeout: {e}")
+            return ""
+        except Exception as e:
+            print(f"Zhipu call failed: {type(e).__name__}: {e}")
+            return ""
 
     async def stream(
         self,
@@ -122,7 +167,87 @@ class LLMClient:
         user_prompt: str,
         temperature: float = 0.7,
     ) -> AsyncIterator[str]:
-        async for chunk in self.provider.stream(system_prompt, user_prompt, temperature):
+        payload = {
+            "model": self.model,
+            "messages": self._build_messages(system_prompt, user_prompt),
+            "stream": True,
+            "temperature": temperature,
+        }
+        async with self.client.stream(
+            "POST",
+            f"{self.base_url}/chat/completions",
+            json=payload,
+            headers={"Authorization": f"Bearer {self.api_key}"},
+        ) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line.strip() or line.strip() == "data: [DONE]":
+                    continue
+                if line.startswith("data: "):
+                    line = line[6:]
+                try:
+                    chunk = json.loads(line)
+                    delta = chunk.get("choices", [{}])[0].get("delta", {})
+                    content = delta.get("content", "")
+                    if content:
+                        yield content
+                except json.JSONDecodeError:
+                    continue
+
+
+class LLMClient:
+    """统一 LLM 客户端，支持 provider 选择和自动 fallback。"""
+
+    def __init__(self, primary_provider: LLMProvider | None = None, fallback_provider: LLMProvider | None = None):
+        # 默认根据配置选择 primary provider
+        self.primary_provider = primary_provider or self._create_provider(settings.llm_provider)
+        # fallback 固定为本地 Ollama
+        self.fallback_provider = fallback_provider or OllamaProvider()
+
+    @staticmethod
+    def _create_provider(provider_name: str) -> LLMProvider:
+        if provider_name.lower() == "zhipu":
+            return ZhipuProvider()
+        return OllamaProvider()
+
+    async def complete(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        json_mode: bool = False,
+        temperature: float = 0.7,
+    ) -> str:
+        # 优先使用主 provider
+        result = await self.primary_provider.complete(
+            system_prompt, user_prompt, json_mode, temperature
+        )
+        if result:
+            return result
+
+        # 主 provider 失败时 fallback 到本地 Ollama
+        print("[LLMClient] primary provider failed, falling back to Ollama")
+        return await self.fallback_provider.complete(
+            system_prompt, user_prompt, json_mode, temperature
+        )
+
+    async def stream(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float = 0.7,
+    ) -> AsyncIterator[str]:
+        # 优先使用主 provider
+        try:
+            async for chunk in self.primary_provider.stream(system_prompt, user_prompt, temperature):
+                if chunk:
+                    yield chunk
+                    return
+        except Exception as e:
+            print(f"[LLMClient] primary stream failed: {e}")
+
+        # fallback
+        print("[LLMClient] primary stream failed, falling back to Ollama")
+        async for chunk in self.fallback_provider.stream(system_prompt, user_prompt, temperature):
             yield chunk
 
 

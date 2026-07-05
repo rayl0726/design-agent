@@ -86,25 +86,8 @@
           </div>
         </div>
 
-        <!-- 有会话但无消息 -->
-        <div v-else-if="messages.length === 0" class="welcome-chat">
-          <div class="ai-greeting">
-            <div class="ai-avatar">AI</div>
-            <div class="greeting-bubble">
-              <p>你好！我是你的美陈设计助手。</p>
-              <p>请告诉我：</p>
-              <ul>
-                <li>项目主题（如：夏日海洋、新春国潮）</li>
-                <li>空间类型（购物中心 / 百货 / 快闪店 / 展厅等）</li>
-                <li>预算区间</li>
-                <li>涉及哪些点位？每个点位需要几个？</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
         <!-- 消息列表 -->
-        <template v-else>
+        <template v-if="sessionId">
           <div
             v-for="msg in messages"
             :key="msg.id"
@@ -126,6 +109,11 @@
                 <pre v-else class="raw-content">{{ msg.content }}</pre>
               </div>
             </div>
+          </div>
+
+          <!-- 思考过程 -->
+          <div v-if="thinkingLogs.length > 0 || session.status === 'PARSING'" class="thinking-wrapper">
+            <ThinkingProcess :logs="thinkingLogs" :is-running="session.status === 'PARSING'" />
           </div>
         </template>
       </div>
@@ -168,9 +156,10 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, ChatDotRound, Delete, MagicStick, Paperclip, Promotion } from '@element-plus/icons-vue'
-import { projectApi, messageApi } from '../api/client.js'
+import { projectApi, messageApi, thinkingApi } from '../api/client.js'
 import TextMessage from '../components/chat/TextMessage.vue'
 import IdeaGallery from '../components/chat/IdeaGallery.vue'
+import ThinkingProcess from '../components/chat/ThinkingProcess.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -184,6 +173,7 @@ const creating = ref(false)
 const messageList = ref(null)
 const polling = ref(false)
 let pollTimer = null
+const thinkingLogs = ref([])
 
 const sortedSessions = computed(() => {
   return [...sessions.value].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
@@ -235,6 +225,19 @@ const loadMessages = async () => {
   }
 }
 
+const loadThinkingLogs = async () => {
+  if (!sessionId.value) {
+    thinkingLogs.value = []
+    return
+  }
+  try {
+    const res = await thinkingApi.list(sessionId.value)
+    thinkingLogs.value = res.data
+  } catch (e) {
+    console.error(e)
+  }
+}
+
 const loadSessions = async () => {
   try {
     const res = await projectApi.list()
@@ -276,6 +279,7 @@ const startPolling = () => {
     try {
       await loadMessages()
       await loadSession()
+      await loadThinkingLogs()
       const running = session.value.status === 'PARSING'
       if (!running) {
         stopPolling()
@@ -344,6 +348,7 @@ onMounted(() => {
   loadSessions()
   loadSession()
   loadMessages()
+  loadThinkingLogs()
 })
 
 onUnmounted(() => {
@@ -354,6 +359,7 @@ watch(() => route.params.id, (newId) => {
   sessionId.value = newId || null
   loadSession()
   loadMessages()
+  loadThinkingLogs()
 })
 </script>
 
@@ -815,5 +821,10 @@ watch(() => route.params.id, (newId) => {
   text-align: center;
   font-size: 12px;
   color: #94a3b8;
+}
+
+.thinking-wrapper {
+  margin-bottom: 24px;
+  padding-left: 52px;
 }
 </style>

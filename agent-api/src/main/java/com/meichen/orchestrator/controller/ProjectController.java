@@ -2,8 +2,10 @@ package com.meichen.orchestrator.controller;
 
 import com.meichen.orchestrator.entity.Project;
 import com.meichen.orchestrator.entity.SessionMessage;
+import com.meichen.orchestrator.entity.ThinkingLog;
 import com.meichen.orchestrator.repository.ProjectRepository;
 import com.meichen.orchestrator.service.SessionMessageService;
+import com.meichen.orchestrator.service.ThinkingLogService;
 import com.meichen.orchestrator.service.WorkflowService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,15 +21,18 @@ public class ProjectController {
     private final WorkflowService workflowService;
     private final ProjectRepository projectRepository;
     private final SessionMessageService sessionMessageService;
+    private final ThinkingLogService thinkingLogService;
     private final ObjectMapper objectMapper;
 
     public ProjectController(WorkflowService workflowService,
                              ProjectRepository projectRepository,
                              SessionMessageService sessionMessageService,
+                             ThinkingLogService thinkingLogService,
                              ObjectMapper objectMapper) {
         this.workflowService = workflowService;
         this.projectRepository = projectRepository;
         this.sessionMessageService = sessionMessageService;
+        this.thinkingLogService = thinkingLogService;
         this.objectMapper = objectMapper;
     }
 
@@ -159,6 +164,11 @@ public class ProjectController {
     @GetMapping("/{id}/messages")
     public ResponseEntity<List<SessionMessage>> listMessages(@PathVariable("id") String projectId) {
         return ResponseEntity.ok(sessionMessageService.listMessages(projectId));
+    }
+
+    @GetMapping("/{id}/thinking-logs")
+    public ResponseEntity<List<ThinkingLog>> listThinkingLogs(@PathVariable("id") String projectId) {
+        return ResponseEntity.ok(thinkingLogService.listByProject(projectId));
     }
 
     @PostMapping("/{id}/messages")

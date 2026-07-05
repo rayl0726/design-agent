@@ -21,6 +21,10 @@ export const projectApi = {
 }
 
 export const messageApi = {
-  list: (sessionId) => client.get(`/projects/${sessionId}/messages`),
-  send: (sessionId, content) => client.post(`/projects/${sessionId}/messages`, { content }),
+  list: (projectId) => client.get(`/projects/${projectId}/messages`),
+  send: (projectId, content) => client.post(`/projects/${projectId}/messages`, { content }),
+}
+
+export const thinkingApi = {
+  list: (projectId) => client.get(`/projects/${projectId}/thinking-logs`),
 }

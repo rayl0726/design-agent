@@ -26,9 +26,11 @@ public class WorkflowEngine {
     private final WebClient webClient;
     private final WorkflowLogRepository logRepository;
     private final ExecutorService executor;
+    private final com.meichen.orchestrator.service.ThinkingLogService thinkingLogService;
 
     public WorkflowEngine(WebClient.Builder webClientBuilder, 
                           WorkflowLogRepository logRepository,
+                          com.meichen.orchestrator.service.ThinkingLogService thinkingLogService,
                           @Value("${agent-core.base-url:http://localhost:8000}") String agentCoreBaseUrl) {
         HttpClient httpClient = HttpClient.create()
             .option(io.netty.channel.ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000)
@@ -39,6 +41,7 @@ public class WorkflowEngine {
             .clientConnector(new ReactorClientHttpConnector(httpClient))
             .build();
         this.logRepository = logRepository;
+        this.thinkingLogService = thinkingLogService;
         this.executor = Executors.newFixedThreadPool(8);
     }
 
@@ -160,6 +163,10 @@ public class WorkflowEngine {
 
     private Object runNode(String projectId, WorkflowNode node, Map<String, Object> outputs) {
         log.info("runNode called for node: {}, project: {}", node.name(), projectId);
+        boolean logThinking = thinkingLogService.shouldLog(node.name());
+        if (logThinking) {
+            thinkingLogService.logStarted(projectId, node.name());
+        }
         
         // Build payload from dependencies
         Map<String, Object> payload = new HashMap<>();
@@ -216,6 +223,9 @@ public class WorkflowEngine {
                 successLog.setOutputJson(response);
                 successLog.setRetryCount(retries);
                 logRepository.save(successLog);
+                if (logThinking) {
+                    thinkingLogService.logCompleted(projectId, node.name());
+                }
 
                 return parseJson(response);
             } catch (Exception e) {
@@ -233,9 +243,13 @@ public class WorkflowEngine {
         failLog.setProjectId(projectId);
         failLog.setNodeName(node.name());
         failLog.setStatus("failed");
-        failLog.setErrorMessage(lastError != null ? lastError.getMessage() : "Unknown error");
+        String errorMsg = lastError != null ? lastError.getMessage() : "Unknown error";
+        failLog.setErrorMessage(errorMsg);
         failLog.setRetryCount(retries);
         logRepository.save(failLog);
+        if (logThinking) {
+            thinkingLogService.logFailed(projectId, node.name(), errorMsg);
+        }
 
         throw new RuntimeException("Node " + node.name() + " failed after " + MAX_RETRIES + " retries", lastError);
     }
