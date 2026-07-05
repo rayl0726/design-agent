@@ -164,7 +164,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, ChatDotRound, Delete, MagicStick, Paperclip, Promotion } from '@element-plus/icons-vue'
@@ -182,6 +182,8 @@ const inputText = ref('')
 const sending = ref(false)
 const creating = ref(false)
 const messageList = ref(null)
+const polling = ref(false)
+let pollTimer = null
 
 const sortedSessions = computed(() => {
   return [...sessions.value].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
@@ -266,6 +268,32 @@ const quickStart = async (text) => {
   setTimeout(() => sendMessage(), 300)
 }
 
+const startPolling = () => {
+  stopPolling()
+  polling.value = true
+  pollTimer = setInterval(async () => {
+    if (!sessionId.value) return
+    try {
+      await loadMessages()
+      await loadSession()
+      const running = session.value.status === 'PARSING'
+      if (!running) {
+        stopPolling()
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }, 2000)
+}
+
+const stopPolling = () => {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+  polling.value = false
+}
+
 const sendMessage = async () => {
   const text = inputText.value.trim()
   if (!text || !sessionId.value) return
@@ -274,6 +302,7 @@ const sendMessage = async () => {
     await messageApi.send(sessionId.value, text)
     inputText.value = ''
     await loadMessages()
+    startPolling()
   } catch (e) {
     ElMessage.error('发送失败')
   } finally {
@@ -315,6 +344,10 @@ onMounted(() => {
   loadSessions()
   loadSession()
   loadMessages()
+})
+
+onUnmounted(() => {
+  stopPolling()
 })
 
 watch(() => route.params.id, (newId) => {

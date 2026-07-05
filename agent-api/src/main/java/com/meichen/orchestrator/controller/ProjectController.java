@@ -8,6 +8,7 @@ import com.meichen.orchestrator.service.WorkflowService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.*;
 
@@ -18,13 +19,16 @@ public class ProjectController {
     private final WorkflowService workflowService;
     private final ProjectRepository projectRepository;
     private final SessionMessageService sessionMessageService;
+    private final ObjectMapper objectMapper;
 
     public ProjectController(WorkflowService workflowService,
                              ProjectRepository projectRepository,
-                             SessionMessageService sessionMessageService) {
+                             SessionMessageService sessionMessageService,
+                             ObjectMapper objectMapper) {
         this.workflowService = workflowService;
         this.projectRepository = projectRepository;
         this.sessionMessageService = sessionMessageService;
+        this.objectMapper = objectMapper;
     }
 
     @GetMapping
@@ -167,6 +171,31 @@ public class ProjectController {
             throw new IllegalArgumentException("content is required");
         }
         SessionMessage msg = sessionMessageService.addUserMessage(projectId, content);
+
+        Project project = projectRepository.findById(projectId)
+            .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+
+        Map<String, Object> inputs;
+        try {
+            inputs = objectMapper.readValue(project.getRawInputsJson(), Map.class);
+        } catch (Exception e) {
+            inputs = new HashMap<>();
+        }
+        inputs.put("text", content);
+        try {
+            project.setRawInputsJson(objectMapper.writeValueAsString(inputs));
+        } catch (Exception ignored) {}
+        projectRepository.save(project);
+
+        String status = project.getStatus();
+        if ("INIT".equals(status) || "L1_PENDING".equals(status)) {
+            workflowService.startWorkflow(projectId, "L1");
+        } else if ("L2_PENDING".equals(status)) {
+            workflowService.startWorkflow(projectId, "L2");
+        } else if ("L3_PENDING".equals(status)) {
+            workflowService.startWorkflow(projectId, "L3");
+        }
+
         return ResponseEntity.ok(msg);
     }
 
