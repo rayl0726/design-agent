@@ -277,15 +277,16 @@ public class WorkflowService {
 
     @Transactional
     public void updateProjectStatus(String projectId, Map<String, Object> result, String targetLevel, String stopNode) {
-        Project project = projectRepository.findById(projectId).orElse(null);
-        if (project == null) return;
+        try {
+            Project project = projectRepository.findById(projectId).orElse(null);
+            if (project == null) return;
 
-        log.info("updateProjectStatus called for project {}, result keys: {}", projectId, result.keySet());
+            log.info("updateProjectStatus called for project {}, result keys: {}", projectId, result.keySet());
 
-        // 仅处理本次工作流实际执行到的节点输出，避免把 initial_payload 中带入的历史输出重复推送
-        String effectiveStop = stopNode != null ? stopNode : WorkflowDefinition.getNodeForLevel(targetLevel);
+            // 仅处理本次工作流实际执行到的节点输出，避免把 initial_payload 中带入的历史输出重复推送
+            String effectiveStop = stopNode != null ? stopNode : WorkflowDefinition.getNodeForLevel(targetLevel);
 
-        if ("concept_design".equals(effectiveStop) && result.containsKey("concept_design")) {
+            if ("concept_design".equals(effectiveStop) && result.containsKey("concept_design")) {
             Map<String, Object> conceptDesign = (Map<String, Object>) result.get("concept_design");
             project.setL1OutputJson(toJson(conceptDesign));
             project.setCurrentLevel("L1");
@@ -339,6 +340,10 @@ public class WorkflowService {
         finalStatus.put("status", project.getStatus());
         finalStatus.put("current_level", project.getCurrentLevel() != null ? project.getCurrentLevel() : "");
         sseEmitterService.sendToProject(projectId, "status", finalStatus);
+        } catch (Exception e) {
+            log.error("updateProjectStatus failed for project {}: {}", projectId, e.getMessage(), e);
+            updateProjectFailed(projectId, e.getMessage() != null ? e.getMessage() : "保存结果失败");
+        }
     }
 
     private Map<String, Object> generateHtmlReport(String projectId, String projectName, String description, Map<String, Object> workflowResult) {
@@ -417,13 +422,17 @@ public class WorkflowService {
     }
 
     private void pushMessage(String projectId, SessionMessage msg) {
-        sseEmitterService.sendToProject(projectId, "message", Map.of(
-            "id", msg.getId(),
-            "role", msg.getRole(),
-            "message_type", msg.getMessageType(),
-            "content", msg.getContent(),
-            "created_at", msg.getCreatedAt()
-        ));
+        if (msg == null) {
+            log.warn("pushMessage called with null message for project {}", projectId);
+            return;
+        }
+        Map<String, Object> event = new HashMap<>();
+        event.put("id", msg.getId() != null ? msg.getId() : "");
+        event.put("role", msg.getRole() != null ? msg.getRole() : "");
+        event.put("message_type", msg.getMessageType() != null ? msg.getMessageType() : "");
+        event.put("content", msg.getContent() != null ? msg.getContent() : "");
+        event.put("created_at", msg.getCreatedAt() != null ? msg.getCreatedAt() : "");
+        sseEmitterService.sendToProject(projectId, "message", event);
     }
 
     @SuppressWarnings("unchecked")

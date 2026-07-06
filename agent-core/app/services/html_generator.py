@@ -1,6 +1,7 @@
-import os
-import json
 from datetime import datetime
+from pathlib import Path
+
+from app.core.config import settings
 
 
 class HtmlGenerator:
@@ -259,13 +260,11 @@ class HtmlGenerator:
 
     @staticmethod
     def save_html(project_id: str, html_content: str) -> str:
-        output_dir = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'design-data', 'html')
-        os.makedirs(output_dir, exist_ok=True)
-        
-        html_path = f"../design-data/html/{project_id}.html"
-        full_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'design-data', 'html', f"{project_id}.html")
-        
+        output_dir = Path(settings.html_cache_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        full_path = output_dir / f"{project_id}.html"
         with open(full_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
-        
-        return html_path
+
+        return f"/data/html/{project_id}.html"

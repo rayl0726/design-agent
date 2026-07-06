@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -66,36 +67,36 @@ public class SseEmitterService {
         try {
             Project project = projectRepository.findById(projectId).orElse(null);
             if (project != null) {
-                sendEvent(emitter, "status", Map.of(
-                    "project_id", projectId,
-                    "status", project.getStatus(),
-                    "current_level", project.getCurrentLevel()
-                ));
+                Map<String, Object> statusEvent = new HashMap<>();
+                statusEvent.put("project_id", projectId);
+                statusEvent.put("status", project.getStatus() != null ? project.getStatus() : "");
+                statusEvent.put("current_level", project.getCurrentLevel() != null ? project.getCurrentLevel() : "");
+                sendEvent(emitter, "status", statusEvent);
             }
 
             List<SessionMessage> messages = sessionMessageService.listMessages(projectId);
             for (SessionMessage msg : messages) {
-                sendEvent(emitter, "message", Map.of(
-                    "id", msg.getId(),
-                    "role", msg.getRole(),
-                    "message_type", msg.getMessageType(),
-                    "content", msg.getContent(),
-                    "created_at", msg.getCreatedAt()
-                ));
+                Map<String, Object> event = new HashMap<>();
+                event.put("id", msg.getId() != null ? msg.getId() : "");
+                event.put("role", msg.getRole() != null ? msg.getRole() : "");
+                event.put("message_type", msg.getMessageType() != null ? msg.getMessageType() : "");
+                event.put("content", msg.getContent() != null ? msg.getContent() : "");
+                event.put("created_at", msg.getCreatedAt() != null ? msg.getCreatedAt() : "");
+                sendEvent(emitter, "message", event);
             }
 
             List<ThinkingLog> logs = thinkingLogService.listByProject(projectId);
             for (ThinkingLog log : logs) {
-                sendEvent(emitter, "thinking", Map.of(
-                    "id", log.getId(),
-                    "node_name", log.getNodeName(),
-                    "status", log.getStatus(),
-                    "message", log.getMessage(),
-                    "created_at", log.getCreatedAt()
-                ));
+                Map<String, Object> event = new HashMap<>();
+                event.put("id", log.getId() != null ? log.getId() : "");
+                event.put("node_name", log.getNodeName() != null ? log.getNodeName() : "");
+                event.put("status", log.getStatus() != null ? log.getStatus() : "");
+                event.put("message", log.getMessage() != null ? log.getMessage() : "");
+                event.put("created_at", log.getCreatedAt() != null ? log.getCreatedAt() : "");
+                sendEvent(emitter, "thinking", event);
             }
         } catch (Exception e) {
-            log.error("Failed to send SSE history for project {}: {}", projectId, e.getMessage());
+            log.error("Failed to send SSE history for project {}: {}", projectId, e.getMessage(), e);
         }
     }
 

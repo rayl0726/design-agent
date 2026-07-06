@@ -42,6 +42,7 @@ public class SessionMessage {
         msg.setRole(role);
         msg.setMessageType(messageType);
         msg.setContent(content);
+        msg.setCreatedAt(LocalDateTime.now());
         return msg;
     }
 

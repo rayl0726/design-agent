@@ -73,7 +73,7 @@ Follow this priority order. Explicit user preference always beats observed files
    ```
    If found, use it. If both exist, `.worktrees` wins.
 
-3. **If there is no other guidance available**, default to `.worktrees/` at the project root.
+3. **If there is no other guidance available**, default to a sibling directory at `../.trae-worktrees/<project-name>/` outside the project root. This keeps the project directory clean.
 
 #### Safety Verification (project-local directories only)
 
@@ -91,6 +91,14 @@ git check-ignore -q .worktrees 2>/dev/null || git check-ignore -q worktrees 2>/d
 
 ```bash
 # Determine path based on chosen location
+PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PROJECT_NAME=$(basename "$PROJECT_ROOT")
+
+# Default to a sibling directory if no explicit location was chosen
+if [ -z "$LOCATION" ]; then
+  LOCATION="$PROJECT_ROOT/../.trae-worktrees/$PROJECT_NAME"
+fi
+mkdir -p "$LOCATION"
 path="$LOCATION/$BRANCH_NAME"
 
 git worktree add "$path" -b "$BRANCH_NAME"
@@ -150,7 +158,7 @@ Ready to implement <feature-name>
 | `.worktrees/` exists | Use it (verify ignored) |
 | `worktrees/` exists | Use it (verify ignored) |
 | Both exist | Use `.worktrees/` |
-| Neither exists | Check instruction file, then default `.worktrees/` |
+| Neither exists | Check instruction file, then default `../.trae-worktrees/<project-name>/` |
 | Directory not ignored | Add to .gitignore + commit |
 | Permission error on create | Sandbox fallback, work in place |
 | Tests fail during baseline | Report failures + ask |

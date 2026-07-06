@@ -337,13 +337,17 @@ public class DialogueService {
     }
 
     private void pushMessage(String projectId, SessionMessage msg) {
-        sseEmitterService.sendToProject(projectId, "message", Map.of(
-            "id", msg.getId(),
-            "role", msg.getRole(),
-            "message_type", msg.getMessageType(),
-            "content", msg.getContent(),
-            "created_at", msg.getCreatedAt()
-        ));
+        if (msg == null) {
+            log.warn("pushMessage called with null message for project {}", projectId);
+            return;
+        }
+        Map<String, Object> event = new HashMap<>();
+        event.put("id", msg.getId() != null ? msg.getId() : "");
+        event.put("role", msg.getRole() != null ? msg.getRole() : "");
+        event.put("message_type", msg.getMessageType() != null ? msg.getMessageType() : "");
+        event.put("content", msg.getContent() != null ? msg.getContent() : "");
+        event.put("created_at", msg.getCreatedAt() != null ? msg.getCreatedAt() : "");
+        sseEmitterService.sendToProject(projectId, "message", event);
     }
 
     private void pushThinking(String projectId, String nodeName, String status) {

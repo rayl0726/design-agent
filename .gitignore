@@ -7,7 +7,4 @@ node_modules/
 .env
 .DS_Store
 *.log
-data/
-agent-core/data/
-agent-api/data/
-.worktrees/
+.vscode

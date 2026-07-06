@@ -29,6 +29,9 @@ spring:
 agent-core:
   base-url: http://${AGENT_CORE_HOST:localhost}:${AGENT_CORE_PORT:8000}
 
+app:
+  data-dir: ${MEICHEN_DATA_DIR:/Users/liulei/private-work/design-data}
+
 logging:
   level:
     com.meichen.orchestrator: INFO

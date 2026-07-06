@@ -1,4 +1,9 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_AGENT_CORE_ROOT = Path(__file__).resolve().parents[2]
+_DESIGN_DATA = _AGENT_CORE_ROOT.parent / "design-data"
 
 
 class Settings(BaseSettings):
@@ -46,10 +51,11 @@ class Settings(BaseSettings):
     pollinations_timeout: int = 60
     comfyui_base_url: str = "http://localhost:8188"
 
-    upload_dir: str = "../design-data/uploads"
-    image_cache_dir: str = "../design-data/images"
-    template_dir: str = "app/templates"
-    ppt_template_path: str = "../design-data/templates/template.pptx"
+    upload_dir: str = str(_DESIGN_DATA / "uploads")
+    image_cache_dir: str = str(_DESIGN_DATA / "images")
+    html_cache_dir: str = str(_DESIGN_DATA / "html")
+    template_dir: str = str(_AGENT_CORE_ROOT / "app" / "templates")
+    ppt_template_path: str = str(_DESIGN_DATA / "templates" / "template.pptx")
 
     idea_count: int = 3
     images_per_point: int = 3

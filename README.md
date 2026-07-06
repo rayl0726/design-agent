@@ -4,10 +4,10 @@
 
 ## 架构
 
-- **Java 协调层** (`java-orchestrator/`): Spring Boot + 自研 DAG 调度器，负责工作流编排、状态管理、REST API
-- **Python AI 服务** (`python-ai/`): FastAPI，负责 LLM/VLM 推理、RAG 检索、图像生成、文档生成
+- **Java 协调层** (`agent-api/`): Spring Boot + 自研 DAG 调度器，负责工作流编排、状态管理、REST API
+- **Python AI 服务** (`agent-core/`): FastAPI，负责 LLM/VLM 推理、RAG 检索、图像生成、文档生成
 - **向量数据库**: Milvus (Docker)
-- **结构化数据库**: SQLite
+- **结构化数据库**: MySQL
 
 ## 快速开始
 
@@ -30,7 +30,7 @@ ollama pull bge-m3
 ### 3. 启动 Python AI 服务
 
 ```bash
-cd python-ai
+cd agent-core
 pip install -e .
 uvicorn app.main:app --reload --port 8000
 ```
@@ -38,7 +38,7 @@ uvicorn app.main:app --reload --port 8000
 ### 4. 启动 Java 协调层
 
 ```bash
-cd java-orchestrator
+cd agent-api
 ./mvnw spring-boot:run
 ```
 
@@ -68,7 +68,7 @@ cd java-orchestrator
 
 | 层 | 技术 |
 |---|---|
-| 协调层 | Java 21, Spring Boot 3.2, SQLite |
+| 协调层 | Java 17, Spring Boot 3.2, MySQL |
 | AI 服务 | Python 3.11, FastAPI, Ollama |
 | LLM | Qwen2.5 14B/32B, Qwen2.5-VL |
 | Embedding | bge-m3 |
