@@ -118,7 +118,9 @@ class TextParser:
                 '"budget": "预算", "budget_level": "budget档次(low/medium/high)", '
                 '"target_audience": "目标人群", "timeline": "工期", '
                 '"material_restrictions": ["材料限制"], "special_requirements": ["特殊要求"], '
-                '"color_preference": "颜色偏好", "brand_positioning": "品牌定位"}'
+                '"color_preference": "颜色偏好", "brand_positioning": "品牌定位", '
+                '"design_system_preference": "整体串联元素（如海浪弧线、品牌IP、灯光语言等）", '
+                '"points": [{"name": "点位名称（如中庭/门头/DP点）", "count": 数量, "size": "尺寸如6m×4m×3m", "notes": "备注"}]}'
             )
             raw = await llm_client.complete(self.SYSTEM, prompt, json_mode=True)
             try:
@@ -153,25 +155,85 @@ class TextParser:
         if budget_match:
             budget = budget_match.group(2).strip()
 
+        if not space_type:
+            space_keywords = ["购物中心", "商场", "百货", "快闪店", "展厅", "步行街", "中庭", "门店", "专卖店"]
+            for keyword in space_keywords:
+                if keyword in text:
+                    if keyword == "中庭":
+                        space_type = "购物中心"
+                    else:
+                        space_type = keyword
+                    break
+
+        if not budget:
+            budget_match = re.search(r"(\d+(?:\.\d+)?)\s*(万|元|千)", text)
+            if budget_match:
+                budget = budget_match.group(1) + budget_match.group(2)
+
         budget_level = "medium"
-        budget_lower = budget.lower()
-        if "低" in budget_lower or "少" in budget_lower:
-            budget_level = "low"
-        elif "高" in budget_lower or "多" in budget_lower:
-            budget_level = "high"
+        if budget:
+            budget_lower = budget.lower()
+            if "低" in budget_lower or "少" in budget_lower:
+                budget_level = "low"
+            elif "高" in budget_lower or "多" in budget_lower:
+                budget_level = "high"
+            else:
+                try:
+                    match = re.search(r"(\d+)", budget)
+                    if match:
+                        amount = int(match.group(1))
+                        if amount < 10:
+                            budget_level = "low"
+                        elif amount > 30:
+                            budget_level = "high"
+                except:
+                    pass
+
+        # 尝试提取点位信息
+        points = []
+        point_keywords = ["灯光画", "中庭", "门头", "灯饰画", "座椅", "DP点", "快闪店", "扶梯", "连廊", "服务台", "立柱", "橱窗", "吊旗", "地贴", "指示牌", "花车", "摊位", "入口"]
+        for kw in point_keywords:
+            pattern = re.search(rf"({kw})\s*[×xX*]?\s*(\d+)", text)
+            if pattern:
+                points.append({"name": kw, "count": int(pattern.group(2)), "notes": ""})
+            elif kw in text and not any(p["name"] == kw for p in points):
+                count_pattern = re.search(rf"{kw}(\d+)", text)
+                if count_pattern:
+                    points.append({"name": kw, "count": int(count_pattern.group(1)), "notes": ""})
+                else:
+                    points.append({"name": kw, "count": 1, "notes": ""})
+
+        # 提取整体串联元素
+        design_system_preference = ""
+        ds_match = re.search(r"(?:整体串联元素|串联元素|统一元素|设计元素)[用是：:]\s*([^\n。，]+)", text)
+        if ds_match:
+            design_system_preference = ds_match.group(1).strip()
+
+        # 从点位 notes 中提取尺寸
+        for p in points:
+            notes = p.get("notes", "")
+            if notes and not p.get("size"):
+                size_match = re.search(r"(\d+[\.\d]*)\s*[m米]\s*[×xX*]\s*(\d+[\.\d]*)\s*[m米]?\s*(?:[×xX*]\s*(\d+[\.\d]*)\s*[m米]?)?", notes)
+                if size_match:
+                    size = f"{size_match.group(1)}m×{size_match.group(2)}m"
+                    if size_match.group(3):
+                        size += f"×{size_match.group(3)}m"
+                    p["size"] = size
 
         return {
-            "theme": theme or "现代商业",
-            "style": style or "现代简约",
-            "space_type": space_type or "",
+            "theme": theme,
+            "style": style,
+            "space_type": space_type,
             "budget": budget,
-            "budget_level": budget_level,
+            "budget_level": budget_level if budget else None,
             "target_audience": "",
             "timeline": "",
             "material_restrictions": [],
             "special_requirements": [],
             "color_preference": "",
             "brand_positioning": "",
+            "design_system_preference": design_system_preference,
+            "points": points,
             "source_type": "text",
         }
 
@@ -190,8 +252,10 @@ class InputMerger:
             "special_requirements": [],
             "color_preference": None,
             "brand_positioning": None,
+            "design_system_preference": None,
             "space_description": "",
             "references": [],
+            "points": [],
             "raw_inputs": parsed_results,
         }
 
@@ -199,11 +263,20 @@ class InputMerger:
             st = result.get("source_type")
             if st == "text":
                 for key in ["space_type", "budget", "budget_level", "theme", "style",
-                            "target_audience", "timeline", "color_preference", "brand_positioning"]:
+                            "target_audience", "timeline", "color_preference", "brand_positioning",
+                            "design_system_preference"]:
                     if result.get(key) and not merged.get(key):
                         merged[key] = result[key]
                 merged["material_restrictions"].extend(result.get("material_restrictions", []))
                 merged["special_requirements"].extend(result.get("special_requirements", []))
+                for point in result.get("points", []):
+                    existing = next((p for p in merged["points"] if p.get("name") == point.get("name")), None)
+                    if existing:
+                        existing["count"] = point.get("count", existing.get("count", 1))
+                        if point.get("notes"):
+                            existing["notes"] = point.get("notes")
+                    else:
+                        merged["points"].append(point)
             elif st in ("photo", "video"):
                 desc = result.get("raw_description") or result.get("space_description") or ""
                 if desc:

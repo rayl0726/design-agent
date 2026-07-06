@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import Any
 
@@ -12,14 +13,119 @@ class VisualDesignerAgent:
     SYSTEM = "你是一位擅长 AI 视觉表达的美陈设计师，精通将概念转化为可落地的视觉方案。"
 
     async def design(self, l1: dict[str, Any], requirement: dict[str, Any]) -> dict[str, Any]:
-        concept_images = await self._generate_concept_images(l1, requirement)
-        color_material_board = await self._generate_color_material_board(l1, requirement)
+        ideas = l1.get("ideas", [])
+        if not ideas:
+            # 兼容旧结构：如果没有 ideas，走原来的通用概念图生成
+            concept_images = await self._generate_concept_images(l1, requirement)
+            color_material_board = await self._generate_color_material_board(l1, requirement)
+            return {
+                "level": "L2",
+                "concept_images": concept_images,
+                "color_material_board": color_material_board,
+            }
 
+        ideas_with_images = await self._generate_idea_images(ideas)
         return {
             "level": "L2",
-            "concept_images": concept_images,
-            "color_material_board": color_material_board,
+            "ideas": ideas_with_images,
         }
+
+    async def _generate_idea_images(self, ideas: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        results = []
+        all_tasks = []
+        task_to_point = {}
+        task_to_idea = {}
+
+        for idea in ideas:
+            enriched = dict(idea)
+            points = idea.get("points", [])
+            
+            if points:
+                for point in points:
+                    prompts = [point.get("left_prompt", ""), point.get("center_prompt", ""), point.get("right_prompt", "")][:settings.images_per_point]
+                    point["image_urls"] = [""] * settings.images_per_point
+                    for prompt_idx, prompt in enumerate(prompts):
+                        if prompt:
+                            task = image_generation.generate(prompt, aspect_ratio="16:9", style="realistic")
+                            all_tasks.append(task)
+                            task_to_point[task] = (point, prompt_idx)
+                            task_to_idea[task] = idea.get("title")
+                
+                first_point = points[0]
+                if first_point.get("image_urls"):
+                    enriched["image_url"] = first_point["image_urls"][1] if len(first_point["image_urls"]) > 1 else first_point["image_urls"][0]
+            else:
+                prompts = idea.get("image_prompts", [])
+                if not prompts and idea.get("image_prompt"):
+                    prompts = [idea.get("image_prompt")]
+                if not prompts:
+                    base_prompt = self._build_default_prompt(idea)
+                    prompts = self._expand_prompts(base_prompt)
+
+                enriched["image_urls"] = [""] * min(len(prompts), settings.images_per_point)
+                for i, prompt in enumerate(prompts[:settings.images_per_point]):
+                    task = image_generation.generate(prompt, aspect_ratio="16:9", style="realistic")
+                    all_tasks.append(task)
+                    task_to_point[task] = (enriched, i)
+                    task_to_idea[task] = idea.get("title")
+                enriched["image_url"] = ""
+            
+            results.append(enriched)
+
+        if all_tasks:
+            print(f"[VisualDesigner] Starting parallel image generation: {len(all_tasks)} images, max parallel={settings.max_parallel_images}")
+            semaphore = asyncio.Semaphore(settings.max_parallel_images)
+            
+            async def with_limit(task, point_info, idea_title):
+                async with semaphore:
+                    try:
+                        result = await task
+                        point, idx = point_info
+                        if isinstance(point, dict) and "image_urls" in point:
+                            point["image_urls"][idx] = result
+                        elif isinstance(point, dict) and "image_urls" in point:
+                            point["image_urls"][idx] = result
+                        print(f"[VisualDesigner] generated image for '{idea_title}': {result}")
+                        return result
+                    except Exception as e:
+                        print(f"[VisualDesigner] image generation failed for '{idea_title}': {e}")
+                        point, idx = point_info
+                        if isinstance(point, dict) and "image_urls" in point:
+                            point["image_urls"][idx] = ""
+                        return ""
+
+            limited_tasks = [with_limit(task, task_to_point[task], task_to_idea[task]) for task in all_tasks]
+            await asyncio.gather(*limited_tasks)
+            print(f"[VisualDesigner] All {len(all_tasks)} images generated")
+
+        for enriched in results:
+            points = enriched.get("points", [])
+            if points:
+                first_point = points[0]
+                if first_point.get("image_urls"):
+                    enriched["image_url"] = first_point["image_urls"][1] if len(first_point["image_urls"]) > 1 else first_point["image_urls"][0]
+            elif enriched.get("image_urls"):
+                enriched["image_url"] = enriched["image_urls"][0] if enriched["image_urls"] else ""
+
+        return results
+
+    def _expand_prompts(self, base_prompt: str) -> list[str]:
+        """将一个基础提示词扩展为 5 个不同视角的提示词。"""
+        return [
+            f"Bird's eye view, {base_prompt}, aerial perspective showing full layout",
+            f"Main entrance frontal view, {base_prompt}, eye-level shot, welcoming composition",
+            f"Atrium centerpiece close-up, {base_prompt}, dramatic lighting, detailed installation",
+            f"Storefront/entrance detail shot, {base_prompt}, material texture, craftsmanship",
+            f"DP point interactive area close-up, {base_prompt}, visitors engaging, lifestyle photography",
+        ]
+
+    def _build_default_prompt(self, idea: dict[str, Any]) -> str:
+        return (
+            f"Commercial display design in shopping mall, "
+            f"{idea.get('title', '')}, {idea.get('concept', '')}, {idea.get('style', '')} style, "
+            f"{idea.get('materials', '')}, realistic rendering, soft lighting, "
+            f"high-end commercial space, professional architecture photography"
+        )
 
     async def _generate_concept_images(
         self, l1: dict[str, Any], requirement: dict[str, Any]

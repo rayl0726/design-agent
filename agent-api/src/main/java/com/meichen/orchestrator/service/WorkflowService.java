@@ -1,6 +1,7 @@
 package com.meichen.orchestrator.service;
 
 import com.meichen.orchestrator.entity.Project;
+import com.meichen.orchestrator.entity.SessionMessage;
 import com.meichen.orchestrator.entity.WorkflowLog;
 import com.meichen.orchestrator.repository.ProjectRepository;
 import com.meichen.orchestrator.repository.WorkflowLogRepository;
@@ -8,15 +9,19 @@ import com.meichen.orchestrator.workflow.WorkflowEngine;
 import com.meichen.orchestrator.workflow.WorkflowDefinition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
 
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.Executor;
 
 @Service
 public class WorkflowService {
@@ -28,17 +33,27 @@ public class WorkflowService {
     private final WorkflowEngine workflowEngine;
     private final WebClient webClient;
     private final SessionMessageService sessionMessageService;
+    private final SseEmitterService sseEmitterService;
+    private final Executor workflowExecutor;
+
+    @Autowired
+    @Lazy
+    private WorkflowService self;
 
     public WorkflowService(ProjectRepository projectRepository,
                            WorkflowLogRepository logRepository,
                            WorkflowEngine workflowEngine,
                            WebClient.Builder webClientBuilder,
                            SessionMessageService sessionMessageService,
+                           SseEmitterService sseEmitterService,
+                           @Qualifier("workflowExecutor") Executor workflowExecutor,
                            @Value("${agent-core.base-url:http://localhost:8000}") String agentCoreBaseUrl) {
         this.projectRepository = projectRepository;
         this.logRepository = logRepository;
         this.workflowEngine = workflowEngine;
         this.sessionMessageService = sessionMessageService;
+        this.sseEmitterService = sseEmitterService;
+        this.workflowExecutor = workflowExecutor;
         this.webClient = webClientBuilder.baseUrl(agentCoreBaseUrl).build();
     }
 
@@ -78,29 +93,100 @@ public class WorkflowService {
 
         project.setStatus("PARSING");
         projectRepository.save(project);
+        Map<String, Object> parsingStatus = new HashMap<>();
+        parsingStatus.put("project_id", projectId);
+        parsingStatus.put("status", "PARSING");
+        parsingStatus.put("current_level", project.getCurrentLevel() != null ? project.getCurrentLevel() : "");
+        sseEmitterService.sendToProject(projectId, "status", parsingStatus);
 
         Map<String, Object> payload = parseJson(project.getRawInputsJson());
         payload.put("target_level", targetLevel);
-        
-        String startNode = WorkflowDefinition.getStartNodeForLevel(targetLevel);
+
+        // 如果有已合并的需求，补充到文本输入中，确保工作流能解析到完整信息
+        Map<String, Object> requirement = parseJson(project.getRequirementJson());
+        if (requirement != null && !requirement.isEmpty()) {
+            String richText = buildRichTextFromRequirement(requirement);
+            if (!richText.isEmpty()) {
+                payload.put("text", richText);
+            }
+        }
+
+        String startNode;
         String stopNode = WorkflowDefinition.getNodeForLevel(targetLevel);
-        
+
+        if ("L2".equals(targetLevel)) {
+            if (project.getL1OutputJson() == null || project.getL1OutputJson().isBlank()) {
+                startNode = "photo_parse";
+            } else {
+                startNode = "visual_design";
+                payload.put("concept_design", parseJson(project.getL1OutputJson()));
+            }
+        } else if ("L3".equals(targetLevel)) {
+            startNode = "technical_design";
+            if (project.getL1OutputJson() != null && !project.getL1OutputJson().isBlank()) {
+                payload.put("concept_design", parseJson(project.getL1OutputJson()));
+            }
+            if (project.getL2OutputJson() != null && !project.getL2OutputJson().isBlank()) {
+                payload.put("visual_design", parseJson(project.getL2OutputJson()));
+            }
+            if (project.getRequirementJson() != null && !project.getRequirementJson().isBlank()) {
+                payload.put("requirement_analyze", parseJson(project.getRequirementJson()));
+            }
+        } else {
+            startNode = WorkflowDefinition.getStartNodeForLevel(targetLevel);
+        }
+
         payload.put("start_from", startNode);
         payload.put("stop_at", stopNode);
-        
-        log.info("Starting workflow for project {}: startFrom={}, stopAt={}, targetLevel={}", 
+        log.info("Starting workflow for project {}: startFrom={}, stopAt={}, targetLevel={}",
             projectId, startNode, stopNode, targetLevel);
 
-        // 异步执行工作流
-        new Thread(() -> {
+            final String finalStopNode = stopNode;
+        workflowExecutor.execute(() -> {
             try {
                 Map<String, Object> result = workflowEngine.execute(projectId, payload);
-                updateProjectStatus(projectId, result, targetLevel);
+                self.updateProjectStatus(projectId, result, targetLevel, finalStopNode);
             } catch (Exception e) {
                 log.error("Workflow failed for project {}: {}", projectId, e.getMessage());
-                updateProjectFailed(projectId, e.getMessage());
+                self.updateProjectFailed(projectId, e.getMessage());
             }
-        }).start();
+        });
+    }
+
+    private String buildRichTextFromRequirement(Map<String, Object> requirement) {
+        StringBuilder sb = new StringBuilder();
+        appendIfPresent(sb, "主题", requirement.get("theme"));
+        appendIfPresent(sb, "空间类型", requirement.get("space_type"));
+        appendIfPresent(sb, "预算", requirement.get("budget"));
+        appendIfPresent(sb, "风格", requirement.get("style"));
+        appendIfPresent(sb, "目标人群", requirement.get("target_audience"));
+        appendIfPresent(sb, "工期", requirement.get("timeline"));
+        appendIfPresent(sb, "颜色偏好", requirement.get("color_preference"));
+        appendIfPresent(sb, "品牌定位", requirement.get("brand_positioning"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> points = (List<Map<String, Object>>) requirement.get("points");
+        if (points != null && !points.isEmpty()) {
+            sb.append("涉及点位：");
+            for (Map<String, Object> p : points) {
+                sb.append(p.get("name"));
+                Object count = p.get("count");
+                if (count != null) sb.append("×").append(count);
+                sb.append("、");
+            }
+            if (sb.toString().endsWith("、")) {
+                sb.setLength(sb.length() - 1);
+            }
+            sb.append("。\n");
+        }
+
+        return sb.toString();
+    }
+
+    private void appendIfPresent(StringBuilder sb, String label, Object value) {
+        if (value != null && !(value instanceof String s && s.isEmpty())) {
+            sb.append(label).append("：").append(value).append("。\n");
+        }
     }
 
     @Transactional
@@ -150,20 +236,21 @@ public class WorkflowService {
                 
                 payload.put("start_from", startNode);
                 payload.put("stop_at", stopNode);
-                
-                log.info("Continuing workflow for project {}: startFrom={}, stopAt={}, targetLevel={}", 
+
+                log.info("Continuing workflow for project {}: startFrom={}, stopAt={}, targetLevel={}",
                     projectId, startNode, stopNode, targetLevel);
 
                 final String finalTargetLevel = targetLevel;
-                new Thread(() -> {
+                final String finalStopNode = stopNode;
+                workflowExecutor.execute(() -> {
                     try {
                         Map<String, Object> result = workflowEngine.execute(projectId, payload);
-                        updateProjectStatus(projectId, result, finalTargetLevel);
+                        self.updateProjectStatus(projectId, result, finalTargetLevel, finalStopNode);
                     } catch (Exception e) {
                         log.error("Workflow continuation failed: {}", e.getMessage());
-                        updateProjectFailed(projectId, e.getMessage());
+                        self.updateProjectFailed(projectId, e.getMessage());
                     }
-                }).start();
+                });
             }
     }
 
@@ -188,29 +275,47 @@ public class WorkflowService {
         return status;
     }
 
-    private void updateProjectStatus(String projectId, Map<String, Object> result, String targetLevel) {
+    @Transactional
+    public void updateProjectStatus(String projectId, Map<String, Object> result, String targetLevel, String stopNode) {
         Project project = projectRepository.findById(projectId).orElse(null);
         if (project == null) return;
 
         log.info("updateProjectStatus called for project {}, result keys: {}", projectId, result.keySet());
 
-        if (result.containsKey("concept_design")) {
-            project.setL1OutputJson(toJson(result.get("concept_design")));
+        // 仅处理本次工作流实际执行到的节点输出，避免把 initial_payload 中带入的历史输出重复推送
+        String effectiveStop = stopNode != null ? stopNode : WorkflowDefinition.getNodeForLevel(targetLevel);
+
+        if ("concept_design".equals(effectiveStop) && result.containsKey("concept_design")) {
+            Map<String, Object> conceptDesign = (Map<String, Object>) result.get("concept_design");
+            project.setL1OutputJson(toJson(conceptDesign));
             project.setCurrentLevel("L1");
             project.setStatus("L1_PENDING");
-            sessionMessageService.addAssistantMessage(projectId, "idea_gallery", project.getL1OutputJson());
+            Object ideas = conceptDesign.get("ideas");
+            pushMessage(projectId, sessionMessageService.addAssistantMessage(projectId, "idea_gallery", toJson(ideas != null ? ideas : conceptDesign)));
+            pushMessage(projectId, sessionMessageService.addAssistantMessage(projectId, "text",
+                "已为你生成 3 个创意方向。请直接回复选择第几个（如“选第3个”），我将基于该创意继续生成效果图。"));
         }
-        if (result.containsKey("visual_design")) {
-            project.setL2OutputJson(toJson(result.get("visual_design")));
+        if ("visual_design".equals(effectiveStop) && result.containsKey("visual_design")) {
+            Map<String, Object> visualDesign = (Map<String, Object>) result.get("visual_design");
+            project.setL2OutputJson(toJson(visualDesign));
             project.setCurrentLevel("L2");
             project.setStatus("L2_PENDING");
-            sessionMessageService.addAssistantMessage(projectId, "visual_scheme", project.getL2OutputJson());
+
+            Object ideas = visualDesign.get("ideas");
+            if (ideas instanceof List) {
+                List<Map<String, Object>> ideasWithUrls = convertImagePathsToUrls((List<Map<String, Object>>) ideas);
+                pushMessage(projectId, sessionMessageService.addAssistantMessage(projectId, "idea_gallery", toJson(ideasWithUrls)));
+                pushMessage(projectId, sessionMessageService.addAssistantMessage(projectId, "text",
+                    "已为你生成 3 个创意方向及效果图。请直接回复选择第几个（如“选第3个”），我将基于该创意继续深化方案。"));
+            } else {
+                pushMessage(projectId, sessionMessageService.addAssistantMessage(projectId, "visual_scheme", project.getL2OutputJson()));
+            }
         }
-        if (result.containsKey("technical_design")) {
+        if ("technical_design".equals(effectiveStop) && result.containsKey("technical_design")) {
             project.setL3OutputJson(toJson(result.get("technical_design")));
             project.setCurrentLevel("L3");
             project.setStatus("L3_PENDING");
-            sessionMessageService.addAssistantMessage(projectId, "proposal", project.getL3OutputJson());
+            pushMessage(projectId, sessionMessageService.addAssistantMessage(projectId, "proposal", project.getL3OutputJson()));
         }
         if (result.containsKey("doc_generate")) {
             project.setStatus("COMPLETED");
@@ -229,6 +334,11 @@ public class WorkflowService {
             log.warn("doc_generate not found in result, skipping HTML generation");
         }
         projectRepository.save(project);
+        Map<String, Object> finalStatus = new HashMap<>();
+        finalStatus.put("project_id", projectId);
+        finalStatus.put("status", project.getStatus());
+        finalStatus.put("current_level", project.getCurrentLevel() != null ? project.getCurrentLevel() : "");
+        sseEmitterService.sendToProject(projectId, "status", finalStatus);
     }
 
     private Map<String, Object> generateHtmlReport(String projectId, String projectName, String description, Map<String, Object> workflowResult) {
@@ -289,11 +399,90 @@ public class WorkflowService {
         return result;
     }
 
-    private void updateProjectFailed(String projectId, String error) {
+    @Transactional
+    public void updateProjectFailed(String projectId, String error) {
         Project project = projectRepository.findById(projectId).orElse(null);
         if (project == null) return;
         project.setStatus("FAILED");
         projectRepository.save(project);
+        Map<String, Object> failedStatus = new HashMap<>();
+        failedStatus.put("project_id", projectId);
+        failedStatus.put("status", "FAILED");
+        failedStatus.put("current_level", project.getCurrentLevel() != null ? project.getCurrentLevel() : "");
+        sseEmitterService.sendToProject(projectId, "status", failedStatus);
+        Map<String, Object> errorEvent = new HashMap<>();
+        errorEvent.put("project_id", projectId);
+        errorEvent.put("message", error != null ? error : "工作流执行失败");
+        sseEmitterService.sendToProject(projectId, "error", errorEvent);
+    }
+
+    private void pushMessage(String projectId, SessionMessage msg) {
+        sseEmitterService.sendToProject(projectId, "message", Map.of(
+            "id", msg.getId(),
+            "role", msg.getRole(),
+            "message_type", msg.getMessageType(),
+            "content", msg.getContent(),
+            "created_at", msg.getCreatedAt()
+        ));
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> convertImagePathsToUrls(List<Map<String, Object>> ideas) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Map<String, Object> idea : ideas) {
+            Map<String, Object> copy = new HashMap<>(idea);
+            // 处理单张封面图
+            Object imageUrl = copy.get("image_url");
+            if (imageUrl instanceof String path && !path.isEmpty()) {
+                Path p = Path.of(path);
+                copy.put("image_url", "/images/" + p.getFileName().toString());
+            }
+            // 处理多张图数组（兼容旧结构）
+            Object imageUrls = copy.get("image_urls");
+            if (imageUrls instanceof List) {
+                List<String> urls = new ArrayList<>();
+                for (Object item : (List<?>) imageUrls) {
+                    if (item instanceof String path && !path.isEmpty()) {
+                        Path p = Path.of(path);
+                        urls.add("/images/" + p.getFileName().toString());
+                    } else {
+                        urls.add("");
+                    }
+                }
+                copy.put("image_urls", urls);
+            }
+            // 处理点位图片（新结构）
+            Object pointsObj = copy.get("points");
+            if (pointsObj instanceof List) {
+                List<Map<String, Object>> points = new ArrayList<>();
+                for (Object pointObj : (List<?>) pointsObj) {
+                    if (pointObj instanceof Map) {
+                        Map<String, Object> point = new HashMap<>();
+                        for (Object keyObj : ((Map<?, ?>) pointObj).keySet()) {
+                            String key = String.valueOf(keyObj);
+                            point.put(key, ((Map<?, ?>) pointObj).get(keyObj));
+                        }
+                        Object pointImageUrls = point.get("image_urls");
+                        if (pointImageUrls instanceof List) {
+                            List<String> urls = new ArrayList<>();
+                            for (Object item : (List<?>) pointImageUrls) {
+                                if (item instanceof String path && !path.isEmpty()) {
+                                    Path p = Path.of(path);
+                                    urls.add("/images/" + p.getFileName().toString());
+                                } else {
+                                    urls.add("");
+                                }
+                            }
+                            point.put("image_urls", urls);
+                        }
+                        points.add(point);
+                    }
+                }
+                copy.put("points", points);
+            }
+            result.add(copy);
+        }
+        return result;
     }
 
     private Map<String, Object> logToMap(WorkflowLog log) {

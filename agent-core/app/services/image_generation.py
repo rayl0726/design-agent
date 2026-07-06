@@ -1,4 +1,6 @@
+import asyncio
 import hashlib
+import json
 from abc import ABC, abstractmethod
 from pathlib import Path
 from urllib.parse import quote
@@ -20,20 +22,28 @@ class PollinationsProvider(ImageGenerationProvider):
         self.client = httpx.AsyncClient(timeout=httpx.Timeout(timeout))
 
     async def generate(self, prompt: str, aspect_ratio: str = "16:9", style: str = "realistic") -> str:
-        # Pollinations 使用 URL 参数
+        # Pollinations 使用 URL 参数，添加重试以应对偶发 500
         encoded = quote(prompt)
         url = f"{self.base_url}/prompt/{encoded}?width=1024&height=576&nologo=true&seed=42&enhance=true"
-        resp = await self.client.get(url)
-        resp.raise_for_status()
 
-        # 保存图片
-        cache_dir = Path(settings.image_cache_dir)
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        content_hash = hashlib.md5(prompt.encode()).hexdigest()[:12]
-        path = cache_dir / f"pollinations_{content_hash}.png"
-        with open(path, "wb") as f:
-            f.write(resp.content)
-        return str(path)
+        last_error = None
+        for attempt in range(3):
+            try:
+                resp = await self.client.get(url)
+                resp.raise_for_status()
+
+                cache_dir = Path(settings.image_cache_dir)
+                cache_dir.mkdir(parents=True, exist_ok=True)
+                content_hash = hashlib.md5(prompt.encode()).hexdigest()[:12]
+                path = cache_dir / f"pollinations_{content_hash}.png"
+                with open(path, "wb") as f:
+                    f.write(resp.content)
+                return str(path)
+            except Exception as e:
+                last_error = e
+                print(f"[PollinationsProvider] attempt {attempt + 1} failed: {e}")
+                await asyncio.sleep(1.0 * (attempt + 1))
+        raise last_error
 
 
 class ComfyUIProvider(ImageGenerationProvider):
@@ -75,9 +85,108 @@ class PlaceholderProvider(ImageGenerationProvider):
         return str(path)
 
 
+class ZhipuProvider(ImageGenerationProvider):
+    def __init__(
+        self,
+        api_key: str = settings.zhipu_api_key,
+        base_url: str = settings.zhipu_base_url,
+        model: str = settings.zhipu_image_model,
+    ):
+        self.api_key = api_key
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+        self.client = httpx.AsyncClient(timeout=httpx.Timeout(180.0))
+
+    async def generate(self, prompt: str, aspect_ratio: str = "16:9", style: str = "realistic") -> str:
+        size = "1024x576" if aspect_ratio == "16:9" else "576x1024"
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+            "size": size,
+        }
+        print(f"[ZhipuProvider] generating image, model={self.model}, size={size}, prompt={prompt[:80]}...")
+        resp = await self.client.post(
+            f"{self.base_url}/images/generations",
+            json=payload,
+            headers={"Authorization": f"Bearer {self.api_key}"},
+        )
+        print(f"[ZhipuProvider] response status={resp.status_code}, body={resp.text[:200]}")
+        resp.raise_for_status()
+        data = resp.json()
+        image_url = data.get("data", [{}])[0].get("url", "")
+        if not image_url:
+            raise RuntimeError("智谱未返回图片 URL")
+
+        # 下载图片到本地缓存
+        print(f"[ZhipuProvider] downloading image from {image_url[:80]}...")
+        img_resp = await self.client.get(image_url)
+        print(f"[ZhipuProvider] download status={img_resp.status_code}, len={len(img_resp.content)}")
+        img_resp.raise_for_status()
+        cache_dir = Path(settings.image_cache_dir)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        content_hash = hashlib.md5(prompt.encode()).hexdigest()[:12]
+        path = cache_dir / f"zhipu_{content_hash}.png"
+        with open(path, "wb") as f:
+            f.write(img_resp.content)
+        print(f"[ZhipuProvider] saved to {path}")
+        return str(path)
+
+
+class SiliconFlowProvider(ImageGenerationProvider):
+    def __init__(
+        self,
+        api_key: str = settings.siliconflow_api_key,
+        base_url: str = settings.siliconflow_base_url,
+        model: str = settings.siliconflow_image_model,
+    ):
+        self.api_key = api_key
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+        self.client = httpx.AsyncClient(timeout=httpx.Timeout(180.0))
+
+    async def generate(self, prompt: str, aspect_ratio: str = "16:9", style: str = "realistic") -> str:
+        size = "1024x576" if aspect_ratio == "16:9" else "576x1024"
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+            "image_size": size,
+        }
+        print(f"[SiliconFlowProvider] generating image, model={self.model}, size={size}, prompt={prompt[:80]}...")
+        resp = await self.client.post(
+            f"{self.base_url}/images/generations",
+            json=payload,
+            headers={"Authorization": f"Bearer {self.api_key}"},
+        )
+        print(f"[SiliconFlowProvider] response status={resp.status_code}, body={resp.text[:200]}")
+        resp.raise_for_status()
+        data = resp.json()
+        images = data.get("images", [])
+        if not images:
+            raise RuntimeError("SiliconFlow 未返回图片 URL")
+        image_url = images[0].get("url", "")
+        if not image_url:
+            raise RuntimeError("SiliconFlow 未返回图片 URL")
+
+        # 下载图片到本地缓存
+        print(f"[SiliconFlowProvider] downloading image from {image_url[:80]}...")
+        img_resp = await self.client.get(image_url)
+        print(f"[SiliconFlowProvider] download status={img_resp.status_code}, len={len(img_resp.content)}")
+        img_resp.raise_for_status()
+        cache_dir = Path(settings.image_cache_dir)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        content_hash = hashlib.md5(prompt.encode()).hexdigest()[:12]
+        path = cache_dir / f"siliconflow_{content_hash}.png"
+        with open(path, "wb") as f:
+            f.write(img_resp.content)
+        print(f"[SiliconFlowProvider] saved to {path}")
+        return str(path)
+
+
 class ImageGenerationService:
     def __init__(self):
         self.providers = [
+            SiliconFlowProvider(),
+            ZhipuProvider(),
             PollinationsProvider(),
             ComfyUIProvider(),
             PlaceholderProvider(),
@@ -86,10 +195,15 @@ class ImageGenerationService:
     async def generate(self, prompt: str, aspect_ratio: str = "16:9", style: str = "realistic") -> str:
         last_error = None
         for provider in self.providers:
+            provider_name = type(provider).__name__
             try:
-                return await provider.generate(prompt, aspect_ratio, style)
+                print(f"[ImageGenerationService] trying {provider_name}...")
+                path = await provider.generate(prompt, aspect_ratio, style)
+                print(f"[ImageGenerationService] {provider_name} succeeded: {path}")
+                return path
             except Exception as e:
                 last_error = e
+                print(f"[ImageGenerationService] {provider_name} failed: {e}")
                 continue
         raise RuntimeError(f"所有图像生成提供者均失败: {last_error}")
 

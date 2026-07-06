@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from app.services.knowledge_base import knowledge_base
@@ -12,6 +13,28 @@ class KnowledgeRetrievalAgent:
         requirement: dict[str, Any],
         top_k: int = 5,
     ) -> dict[str, Any]:
+        try:
+            return await asyncio.wait_for(
+                self._retrieve_with_timeout(requirement, top_k),
+                timeout=45.0
+            )
+        except asyncio.TimeoutError:
+            print(f"[KnowledgeRetrieval] retrieve timeout, returning fallback")
+            theme = requirement.get("theme", "")
+            cases = self._get_fallback_cases(f"{theme} 美陈设计案例", top_k)
+            return {
+                "cases": cases,
+                "materials": [],
+                "summary": self._get_fallback_summary(requirement, cases),
+                "case_count": len(cases),
+                "material_count": 0,
+            }
+
+    async def _retrieve_with_timeout(
+        self,
+        requirement: dict[str, Any],
+        top_k: int,
+    ) -> dict[str, Any]:
         theme = requirement.get("theme", "")
         style = requirement.get("style", "")
         space_type = requirement.get("space_type")
@@ -22,14 +45,20 @@ class KnowledgeRetrievalAgent:
         # 语义案例检索（带降级）
         cases = await self._retrieve_with_fallback(query_text, space_type, budget_level, top_k)
 
-        # 材料查询
+        # 材料查询（异步执行，避免阻塞）
         materials = []
         if requirement.get("material_restrictions"):
-            for mat in requirement["material_restrictions"]:
-                found = knowledge_base.structured_query(material_name=mat, limit=3)
-                materials.extend(found)
+            try:
+                for mat in requirement["material_restrictions"]:
+                    loop = asyncio.get_event_loop()
+                    found = await loop.run_in_executor(None,
+                        lambda m=mat: knowledge_base.structured_query(material_name=m, limit=3)
+                    )
+                    materials.extend(found)
+            except Exception:
+                print(f"[KnowledgeRetrieval] structured_query failed, skipping")
 
-        # 生成摘要
+        # 生成摘要（带超时）
         summary = await self._generate_summary(cases, materials, requirement)
 
         return {
@@ -98,30 +127,44 @@ class KnowledgeRetrievalAgent:
         requirement: dict[str, Any],
     ) -> str:
         try:
-            case_texts = []
-            for c in cases:
-                case_texts.append(
-                    f"- {c.get('title', '未命名')}（{c.get('space_type', '')}，{c.get('budget_level', '')}）：{c.get('summary', '')[:100]}"
-                )
-
-            material_texts = []
-            for m in materials:
-                material_texts.append(
-                    f"- {m.get('name', '')}（{m.get('category', '')}）：{m.get('spec', '')}，参考价{m.get('price_low', '?')}-{m.get('price_high', '?')}元/{m.get('unit', '')}"
-                )
-
-            prompt = (
-                "请根据以下检索到的案例和材料信息，为设计师生成一份 800 字以内的参考摘要，"
-                "包含设计灵感、材料参考和价格参考。用 Markdown 格式输出。\n\n"
-                f"需求：{requirement.get('theme', '')} / {requirement.get('style', '')} / {requirement.get('space_type', '')}\n\n"
-                f"参考案例（{len(cases)}个）：\n" + "\n".join(case_texts) + "\n\n"
-                f"相关材料（{len(materials)}种）：\n" + "\n".join(material_texts)
+            return await asyncio.wait_for(
+                self._generate_summary_inner(cases, materials, requirement),
+                timeout=30.0
             )
-            return await llm_client.complete(
-                "你是一位美陈设计资料整理专家", prompt, temperature=0.7
-            )
+        except asyncio.TimeoutError:
+            print(f"[KnowledgeRetrieval] _generate_summary timeout, returning fallback")
+            return self._get_fallback_summary(requirement, cases)
         except Exception:
             return self._get_fallback_summary(requirement, cases)
+
+    async def _generate_summary_inner(
+        self,
+        cases: list[dict[str, Any]],
+        materials: list[dict[str, Any]],
+        requirement: dict[str, Any],
+    ) -> str:
+        case_texts = []
+        for c in cases:
+            case_texts.append(
+                f"- {c.get('title', '未命名')}（{c.get('space_type', '')}，{c.get('budget_level', '')}）：{c.get('summary', '')[:100]}"
+            )
+
+        material_texts = []
+        for m in materials:
+            material_texts.append(
+                f"- {m.get('name', '')}（{m.get('category', '')}）：{m.get('spec', '')}，参考价{m.get('price_low', '?')}-{m.get('price_high', '?')}元/{m.get('unit', '')}"
+            )
+
+        prompt = (
+            "请根据以下检索到的案例和材料信息，为设计师生成一份 800 字以内的参考摘要，"
+            "包含设计灵感、材料参考和价格参考。用 Markdown 格式输出。\n\n"
+            f"需求：{requirement.get('theme', '')} / {requirement.get('style', '')} / {requirement.get('space_type', '')}\n\n"
+            f"参考案例（{len(cases)}个）：\n" + "\n".join(case_texts) + "\n\n"
+            f"相关材料（{len(materials)}种）：\n" + "\n".join(material_texts)
+        )
+        return await llm_client.complete(
+            "你是一位美陈设计资料整理专家", prompt, temperature=0.7
+        )
 
     def _get_fallback_summary(self, requirement: dict[str, Any], cases: list[dict[str, Any]]) -> str:
         theme = requirement.get("theme", "")

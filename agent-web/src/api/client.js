@@ -28,3 +28,12 @@ export const messageApi = {
 export const thinkingApi = {
   list: (projectId) => client.get(`/projects/${projectId}/thinking-logs`),
 }
+
+export const feedbackApi = {
+  list: (projectId) => client.get(`/projects/${projectId}/feedbacks`),
+  create: (projectId, data) => client.post(`/projects/${projectId}/feedbacks`, data),
+}
+
+export const logApi = {
+  agentApi: (lines = 200) => client.get(`/logs/agent-api?lines=${lines}`),
+}

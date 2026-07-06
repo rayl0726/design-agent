@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw, ImageFont
 from app.agents.knowledge_retrieval import retrieve_cases, retrieve_materials
 from app.services.image_generation import generate_images_with_fallback
 from app.core.config import settings
-from app.models.database import SessionLocal
+from app.models.database import get_session
 from app.models.project import MaterialPrice, MaterialSpec
 from app.services.llm_client import llm_client
 
@@ -177,7 +177,7 @@ class TechnicalDesignerAgent:
         items = self._generate_fallback_material_list(requirement)
 
         # 查询价格
-        db = SessionLocal()
+        db = get_session()
         try:
             for item in items:
                 name = item.get("name", "")
@@ -194,7 +194,7 @@ class TechnicalDesignerAgent:
         return items
 
     def _generate_fallback_material_list(self, requirement: dict[str, Any]) -> list[dict[str, Any]]:
-        db = SessionLocal()
+        db = get_session()
         try:
             prices = db.query(MaterialPrice).all()
             if prices:

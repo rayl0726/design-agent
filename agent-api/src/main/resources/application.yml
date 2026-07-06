@@ -5,15 +5,23 @@ spring:
   application:
     name: meichen-orchestrator
   datasource:
-    url: jdbc:mysql://localhost:3306/meichen?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3306/meichen?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&characterEncoding=utf8
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: meichen
     password: meichen123
+    hikari:
+      maximum-pool-size: 25
+      minimum-idle: 10
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
   jpa:
     database-platform: org.hibernate.dialect.MySQLDialect
     hibernate:
       ddl-auto: update
     show-sql: false
+    open-in-view: false
     properties:
       hibernate:
         format_sql: false
@@ -26,3 +34,6 @@ logging:
     com.meichen.orchestrator: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/agent-api.log

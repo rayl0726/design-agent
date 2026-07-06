@@ -5,6 +5,7 @@ import com.meichen.orchestrator.entity.SessionMessage;
 import com.meichen.orchestrator.entity.ThinkingLog;
 import com.meichen.orchestrator.repository.ProjectRepository;
 import com.meichen.orchestrator.service.SessionMessageService;
+import com.meichen.orchestrator.service.DialogueService;
 import com.meichen.orchestrator.service.ThinkingLogService;
 import com.meichen.orchestrator.service.WorkflowService;
 import org.springframework.http.ResponseEntity;
@@ -22,17 +23,20 @@ public class ProjectController {
     private final ProjectRepository projectRepository;
     private final SessionMessageService sessionMessageService;
     private final ThinkingLogService thinkingLogService;
+    private final DialogueService dialogueService;
     private final ObjectMapper objectMapper;
 
     public ProjectController(WorkflowService workflowService,
                              ProjectRepository projectRepository,
                              SessionMessageService sessionMessageService,
                              ThinkingLogService thinkingLogService,
+                             DialogueService dialogueService,
                              ObjectMapper objectMapper) {
         this.workflowService = workflowService;
         this.projectRepository = projectRepository;
         this.sessionMessageService = sessionMessageService;
         this.thinkingLogService = thinkingLogService;
+        this.dialogueService = dialogueService;
         this.objectMapper = objectMapper;
     }
 
@@ -198,10 +202,14 @@ public class ProjectController {
         projectRepository.save(project);
 
         String status = project.getStatus();
-        if ("INIT".equals(status) || "L1_PENDING".equals(status)) {
-            workflowService.startWorkflow(projectId, "L1");
-        } else if ("L2_PENDING".equals(status)) {
+        if ("INIT".equals(status)) {
+            dialogueService.handleUserMessage(projectId, content);
+        } else if ("L1_PENDING".equals(status)) {
+            // 旧流程兼容：直接生成视觉方案
             workflowService.startWorkflow(projectId, "L2");
+        } else if ("L2_PENDING".equals(status)) {
+            // 已展示带图创意，用户选择后进入 L3 技术方案
+            workflowService.startWorkflow(projectId, "L3");
         } else if ("L3_PENDING".equals(status)) {
             workflowService.startWorkflow(projectId, "L3");
         }

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.core.config import settings
-from app.models.database import SessionLocal
+from app.models.database import get_session
 from app.models.project import DesignCase, MaterialPrice
 from app.services.embedding_client import embedding_client
 
@@ -84,45 +84,48 @@ class KnowledgeBase:
         budget_level: str | None = None,
         top_k: int = 5,
     ) -> list[dict[str, Any]]:
-        self._ensure_client()
-        if self._milvus_available:
-            try:
-                embedding = await embedding_client.embed(query)
-                expr_parts = []
-                if space_type:
-                    expr_parts.append(f'space_type == "{space_type}"')
-                if budget_level:
-                    expr_parts.append(f'budget_level == "{budget_level}"')
-                expr = " and ".join(expr_parts) if expr_parts else ""
+        try:
+            self._ensure_client()
+            if self._milvus_available:
+                try:
+                    embedding = await embedding_client.embed(query)
+                    expr_parts = []
+                    if space_type:
+                        expr_parts.append(f'space_type == "{space_type}"')
+                    if budget_level:
+                        expr_parts.append(f'budget_level == "{budget_level}"')
+                    expr = " and ".join(expr_parts) if expr_parts else ""
 
-                results = self._client.search(
-                    collection_name=settings.milvus_collection_cases,
-                    data=[embedding],
-                    anns_field="embedding",
-                    param={"metric_type": "COSINE", "params": {"nprobe": 16}},
-                    limit=top_k,
-                    expr=expr or None,
-                    output_fields=["title", "space_type", "budget_level", "theme", "style", "summary"],
-                )
-                hits = []
-                for result in results[0]:
-                    hits.append(
-                        {
-                            "id": result.id,
-                            "distance": result.distance,
-                            "title": result.entity.get("title"),
-                            "space_type": result.entity.get("space_type"),
-                            "budget_level": result.entity.get("budget_level"),
-                            "theme": result.entity.get("theme"),
-                            "style": result.entity.get("style"),
-                            "summary": result.entity.get("summary"),
-                        }
+                    results = self._client.search(
+                        collection_name=settings.milvus_collection_cases,
+                        data=[embedding],
+                        anns_field="embedding",
+                        param={"metric_type": "COSINE", "params": {"nprobe": 16}},
+                        limit=top_k,
+                        expr=expr or None,
+                        output_fields=["title", "space_type", "budget_level", "theme", "style", "summary"],
                     )
-                return hits
-            except Exception:
+                    hits = []
+                    for result in results[0]:
+                        hits.append(
+                            {
+                                "id": result.id,
+                                "distance": result.distance,
+                                "title": result.entity.get("title"),
+                                "space_type": result.entity.get("space_type"),
+                                "budget_level": result.entity.get("budget_level"),
+                                "theme": result.entity.get("theme"),
+                                "style": result.entity.get("style"),
+                                "summary": result.entity.get("summary"),
+                            }
+                        )
+                    return hits
+                except Exception:
+                    return self._fallback_search(query, space_type, budget_level, top_k)
+            else:
                 return self._fallback_search(query, space_type, budget_level, top_k)
-        else:
-            return self._fallback_search(query, space_type, budget_level, top_k)
+        except Exception:
+            return []
 
     def _fallback_search(
         self,
@@ -131,7 +134,7 @@ class KnowledgeBase:
         budget_level: str | None = None,
         top_k: int = 5,
     ) -> list[dict[str, Any]]:
-        db = SessionLocal()
+        db = get_session()
         try:
             query_obj = db.query(DesignCase)
             if space_type:
@@ -171,7 +174,7 @@ class KnowledgeBase:
         category: str | None = None,
         limit: int = 10,
     ) -> list[dict[str, Any]]:
-        db = SessionLocal()
+        db = get_session()
         try:
             query = db.query(MaterialPrice)
             if material_name:

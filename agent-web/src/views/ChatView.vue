@@ -52,6 +52,10 @@
           <p v-if="sessionId" class="header-subtitle">{{ sessionId }}</p>
         </div>
         <div class="header-actions">
+          <el-button text @click="openLogDrawer">
+            <el-icon><Document /></el-icon>
+            <span class="header-action-text">日志</span>
+          </el-button>
           <el-button v-if="sessionId" text @click="deleteSession">
             <el-icon><Delete /></el-icon>
           </el-button>
@@ -88,33 +92,36 @@
 
         <!-- 消息列表 -->
         <template v-if="sessionId">
-          <div
-            v-for="msg in messages"
-            :key="msg.id"
-            class="message-wrapper"
-            :class="msg.role"
-          >
-            <div class="message-avatar">
-              <div v-if="msg.role === 'user'" class="avatar user-avatar">我</div>
-              <div v-else class="avatar ai-avatar">AI</div>
-            </div>
-            <div class="message-content-box">
-              <div class="message-meta">
-                <span class="message-author">{{ msg.role === 'user' ? '你' : 'AI 助手' }}</span>
-                <span class="message-time">{{ formatTime(msg.createdAt) }}</span>
+          <template v-for="(msg, idx) in messages" :key="msg.id">
+            <div
+              class="message-wrapper"
+              :class="msg.role"
+            >
+              <div class="message-avatar">
+                <div v-if="msg.role === 'user'" class="avatar user-avatar">我</div>
+                <div v-else class="avatar ai-avatar">AI</div>
               </div>
-              <div class="message-body">
-                <TextMessage v-if="msg.messageType === 'text' || msg.messageType === 'summary'" :content="msg.content" />
-                <IdeaGallery v-else-if="msg.messageType === 'idea_gallery'" :ideas="parseJson(msg.content)" @select="handleSelectIdea" />
-                <pre v-else class="raw-content">{{ msg.content }}</pre>
+              <div class="message-content-box">
+                <div class="message-meta">
+                  <span class="message-author">{{ msg.role === 'user' ? '你' : 'AI 助手' }}</span>
+                  <span class="message-time">{{ formatTime(msg.createdAt) }}</span>
+                </div>
+                <div class="message-body">
+                  <TextMessage v-if="msg.messageType === 'text' || msg.messageType === 'summary'" :content="msg.content" />
+                  <IdeaGallery v-else-if="msg.messageType === 'idea_gallery'" :ideas="parseJson(msg.content)" :project-id="sessionId" />
+                  <pre v-else class="raw-content">{{ msg.content }}</pre>
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- 思考过程 -->
-          <div v-if="thinkingLogs.length > 0 || session.status === 'PARSING'" class="thinking-wrapper">
-            <ThinkingProcess :logs="thinkingLogs" :is-running="session.status === 'PARSING'" />
-          </div>
+            <!-- 思考过程：紧跟最后一个用户消息，完成后折叠，后续 AI 回复在其后输出 -->
+            <div
+              v-if="idx === lastUserMessageIndex && (thinkingLogs.length > 0 || session.status === 'PARSING')"
+              class="thinking-wrapper"
+            >
+              <ThinkingProcess :logs="thinkingLogs" :is-running="session.status === 'PARSING'" />
+            </div>
+          </template>
         </template>
       </div>
 
@@ -149,14 +156,29 @@
       </footer>
     </main>
   </div>
+
+  <el-drawer
+    v-model="logDrawerOpen"
+    title="系统日志"
+    direction="rtl"
+    size="720px"
+  >
+    <div class="log-toolbar">
+      <el-button size="small" @click="loadAgentLogs" :loading="logLoading">刷新</el-button>
+    </div>
+    <div v-loading="logLoading" class="log-content">
+      <pre v-if="logLines.length">{{ logLines.join('\n') }}</pre>
+      <el-empty v-else description="暂无日志" :image-size="60" />
+    </div>
+  </el-drawer>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, ChatDotRound, Delete, MagicStick, Paperclip, Promotion } from '@element-plus/icons-vue'
-import { projectApi, messageApi, thinkingApi } from '../api/client.js'
+import { Plus, ChatDotRound, Delete, MagicStick, Paperclip, Promotion, Document } from '@element-plus/icons-vue'
+import { projectApi, messageApi, thinkingApi, logApi } from '../api/client.js'
 import TextMessage from '../components/chat/TextMessage.vue'
 import IdeaGallery from '../components/chat/IdeaGallery.vue'
 import ThinkingProcess from '../components/chat/ThinkingProcess.vue'
@@ -171,12 +193,22 @@ const inputText = ref('')
 const sending = ref(false)
 const creating = ref(false)
 const messageList = ref(null)
-const polling = ref(false)
-let pollTimer = null
 const thinkingLogs = ref([])
+const logDrawerOpen = ref(false)
+const logLines = ref([])
+const logLoading = ref(false)
+let eventSource = null
+let sseReconnectTimer = null
 
 const sortedSessions = computed(() => {
   return [...sessions.value].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+})
+
+const lastUserMessageIndex = computed(() => {
+  for (let i = messages.value.length - 1; i >= 0; i--) {
+    if (messages.value[i].role === 'user') return i
+  }
+  return -1
 })
 
 const formatDate = (str) => {
@@ -238,6 +270,23 @@ const loadThinkingLogs = async () => {
   }
 }
 
+const openLogDrawer = async () => {
+  logDrawerOpen.value = true
+  await loadAgentLogs()
+}
+
+const loadAgentLogs = async () => {
+  logLoading.value = true
+  try {
+    const res = await logApi.agentApi(300)
+    logLines.value = res.data.lines || []
+  } catch (e) {
+    ElMessage.error('加载系统日志失败')
+  } finally {
+    logLoading.value = false
+  }
+}
+
 const loadSessions = async () => {
   try {
     const res = await projectApi.list()
@@ -271,44 +320,150 @@ const quickStart = async (text) => {
   setTimeout(() => sendMessage(), 300)
 }
 
-const startPolling = () => {
-  stopPolling()
-  polling.value = true
-  pollTimer = setInterval(async () => {
-    if (!sessionId.value) return
-    try {
-      await loadMessages()
-      await loadSession()
-      await loadThinkingLogs()
-      const running = session.value.status === 'PARSING'
-      if (!running) {
-        stopPolling()
+const connectSse = (projectId) => {
+  disconnectSse()
+  if (!projectId) return
+
+  const url = `http://localhost:8080/api/v1/projects/${projectId}/events`
+  try {
+    eventSource = new EventSource(url)
+
+    eventSource.addEventListener('status', (e) => {
+      try {
+        const data = JSON.parse(e.data)
+        session.value.status = data.status
+        if (data.current_level) session.value.currentLevel = data.current_level
+      } catch (err) {
+        console.error('Invalid status event', err)
       }
-    } catch (e) {
-      console.error(e)
+    })
+
+    eventSource.addEventListener('message', (e) => {
+      try {
+        const data = JSON.parse(e.data)
+        const exists = messages.value.find((m) => m.id === data.id)
+        if (!exists) {
+          // 如果是真实用户消息，替换掉相同内容的临时消息
+          if (data.role === 'user') {
+            const tempIndex = messages.value.findIndex(
+              (m) => m.role === 'user' && m.id.startsWith('temp-') && m.content === data.content
+            )
+            if (tempIndex >= 0) {
+              messages.value[tempIndex] = {
+                id: data.id,
+                projectId: projectId,
+                role: data.role,
+                messageType: data.message_type,
+                content: data.content,
+                createdAt: data.created_at,
+              }
+              scrollToBottom()
+              return
+            }
+          }
+          messages.value.push({
+            id: data.id,
+            projectId: projectId,
+            role: data.role,
+            messageType: data.message_type,
+            content: data.content,
+            createdAt: data.created_at,
+          })
+          scrollToBottom()
+        }
+      } catch (err) {
+        console.error('Invalid message event', err)
+      }
+    })
+
+    eventSource.addEventListener('thinking', (e) => {
+      try {
+        const data = JSON.parse(e.data)
+        const existing = thinkingLogs.value.find((l) => l.nodeName === data.node_name)
+        if (existing) {
+          existing.status = data.status
+          existing.message = data.message
+          existing.createdAt = new Date().toISOString()
+        } else {
+          thinkingLogs.value.push({
+            nodeName: data.node_name,
+            status: data.status,
+            message: data.message,
+            createdAt: new Date().toISOString(),
+          })
+        }
+        scrollToBottom()
+      } catch (err) {
+        console.error('Invalid thinking event', err)
+      }
+    })
+
+    eventSource.addEventListener('error', (e) => {
+      try {
+        const data = JSON.parse(e.data)
+        ElMessage.error(data.message || '处理出错')
+      } catch (err) {
+        console.error('SSE error', err)
+      }
+      // 非用户主动关闭时自动重连
+      scheduleReconnect(projectId)
+    })
+
+    eventSource.onopen = () => {
+      if (sseReconnectTimer) {
+        clearTimeout(sseReconnectTimer)
+        sseReconnectTimer = null
+      }
     }
-  }, 2000)
+  } catch (e) {
+    console.error('Failed to connect SSE', e)
+    scheduleReconnect(projectId)
+  }
 }
 
-const stopPolling = () => {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
+const scheduleReconnect = (projectId) => {
+  if (sseReconnectTimer) return
+  sseReconnectTimer = setTimeout(() => {
+    sseReconnectTimer = null
+    connectSse(projectId)
+  }, 3000)
+}
+
+const disconnectSse = () => {
+  if (sseReconnectTimer) {
+    clearTimeout(sseReconnectTimer)
+    sseReconnectTimer = null
   }
-  polling.value = false
+  if (eventSource) {
+    eventSource.close()
+    eventSource = null
+  }
 }
 
 const sendMessage = async () => {
   const text = inputText.value.trim()
   if (!text || !sessionId.value) return
   sending.value = true
+
+  // 乐观更新：用户消息立即上屏
+  const tempId = `temp-${Date.now()}`
+  messages.value.push({
+    id: tempId,
+    projectId: sessionId.value,
+    role: 'user',
+    messageType: 'text',
+    content: text,
+    createdAt: new Date().toISOString(),
+  })
+  inputText.value = ''
+  scrollToBottom()
+
   try {
     await messageApi.send(sessionId.value, text)
-    inputText.value = ''
-    await loadMessages()
-    startPolling()
   } catch (e) {
     ElMessage.error('发送失败')
+    // 发送失败时移除临时消息
+    messages.value = messages.value.filter((m) => m.id !== tempId)
   } finally {
     sending.value = false
   }
@@ -335,11 +490,6 @@ const parseJson = (str) => {
   }
 }
 
-const handleSelectIdea = (index) => {
-  inputText.value = `基于第 ${index + 1} 个创意继续生成视觉方案`
-  sendMessage()
-}
-
 const goSession = (id) => {
   router.push(`/project/${id}`)
 }
@@ -349,10 +499,11 @@ onMounted(() => {
   loadSession()
   loadMessages()
   loadThinkingLogs()
+  connectSse(sessionId.value)
 })
 
 onUnmounted(() => {
-  stopPolling()
+  disconnectSse()
 })
 
 watch(() => route.params.id, (newId) => {
@@ -360,6 +511,7 @@ watch(() => route.params.id, (newId) => {
   loadSession()
   loadMessages()
   loadThinkingLogs()
+  connectSse(newId)
 })
 </script>
 
@@ -665,12 +817,13 @@ watch(() => route.params.id, (newId) => {
   display: flex;
   gap: 14px;
   margin-bottom: 24px;
-  max-width: 900px;
+  width: 100%;
 }
 
 .message-wrapper.user {
   flex-direction: row-reverse;
   margin-left: auto;
+  max-width: 80%;
 }
 
 .message-avatar {
@@ -699,11 +852,18 @@ watch(() => route.params.id, (newId) => {
 }
 
 .message-content-box {
+  flex: 1;
+  min-width: 0;
   max-width: calc(100% - 60px);
+}
+
+.message-wrapper:not(.user) .message-content-box {
+  max-width: 100%;
 }
 
 .message-wrapper.user .message-content-box {
   align-items: flex-end;
+  max-width: 100%;
 }
 
 .message-meta {
@@ -826,5 +986,33 @@ watch(() => route.params.id, (newId) => {
 .thinking-wrapper {
   margin-bottom: 24px;
   padding-left: 52px;
+}
+
+.header-action-text {
+  margin-left: 4px;
+}
+
+.log-toolbar {
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.log-content {
+  height: calc(100vh - 140px);
+  overflow: auto;
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.log-content pre {
+  margin: 0;
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 </style>

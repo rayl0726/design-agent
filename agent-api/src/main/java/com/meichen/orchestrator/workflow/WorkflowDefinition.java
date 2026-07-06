@@ -18,7 +18,7 @@ public class WorkflowDefinition {
             ), false),
             new WorkflowNode("requirement_analyze", "/agents/requirement-analyst/analyze", List.of("input_merge"), false),
             new WorkflowNode("knowledge_retrieve", "/agents/knowledge-retrieval/retrieve", List.of("requirement_analyze"), false),
-            new WorkflowNode("concept_design", "/agents/concept-designer/design", List.of("knowledge_retrieve"), true),
+            new WorkflowNode("concept_design", "/agents/concept-designer/design", List.of("knowledge_retrieve", "requirement_analyze"), true),
             new WorkflowNode("visual_design", "/agents/visual-designer/design", List.of("concept_design"), true),
             new WorkflowNode("technical_design", "/agents/technical-designer/design", List.of("visual_design", "concept_design", "requirement_analyze"), true),
             new WorkflowNode("doc_generate", "/agents/doc-generator/generate", List.of("technical_design"), false)

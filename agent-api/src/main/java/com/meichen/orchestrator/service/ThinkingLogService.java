@@ -2,14 +2,19 @@ package com.meichen.orchestrator.service;
 
 import com.meichen.orchestrator.entity.ThinkingLog;
 import com.meichen.orchestrator.repository.ThinkingLogRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class ThinkingLogService {
+
+    private static final Logger log = LoggerFactory.getLogger(ThinkingLogService.class);
 
     private static final Map<String, String> NODE_MESSAGES = Map.of(
         "text_parse", "解析用户输入",
@@ -34,32 +39,62 @@ public class ThinkingLogService {
 
     @Transactional
     public void logStarted(String projectId, String nodeName) {
-        ThinkingLog log = new ThinkingLog();
-        log.setProjectId(projectId);
-        log.setNodeName(nodeName);
-        log.setStatus("started");
-        log.setMessage(NODE_MESSAGES.getOrDefault(nodeName, "执行 " + nodeName));
-        thinkingLogRepository.save(log);
+        Optional<ThinkingLog> existing = thinkingLogRepository
+            .findTopByProjectIdAndNodeNameOrderByCreatedAtDesc(projectId, nodeName);
+
+        ThinkingLog tl;
+        if (existing.isPresent()) {
+            tl = existing.get();
+            tl.setStatus("started");
+            tl.setMessage(NODE_MESSAGES.getOrDefault(nodeName, "执行 " + nodeName));
+        } else {
+            tl = new ThinkingLog();
+            tl.setProjectId(projectId);
+            tl.setNodeName(nodeName);
+            tl.setStatus("started");
+            tl.setMessage(NODE_MESSAGES.getOrDefault(nodeName, "执行 " + nodeName));
+        }
+        thinkingLogRepository.save(tl);
     }
 
     @Transactional
     public void logCompleted(String projectId, String nodeName) {
-        ThinkingLog log = new ThinkingLog();
-        log.setProjectId(projectId);
-        log.setNodeName(nodeName);
-        log.setStatus("completed");
-        log.setMessage(NODE_MESSAGES.getOrDefault(nodeName, "执行 " + nodeName) + " 完成");
-        thinkingLogRepository.save(log);
+        Optional<ThinkingLog> existing = thinkingLogRepository
+            .findTopByProjectIdAndNodeNameOrderByCreatedAtDesc(projectId, nodeName);
+
+        if (existing.isPresent()) {
+            ThinkingLog tl = existing.get();
+            tl.setStatus("completed");
+            tl.setMessage(NODE_MESSAGES.getOrDefault(nodeName, "执行 " + nodeName));
+            thinkingLogRepository.save(tl);
+        } else {
+            ThinkingLog tl = new ThinkingLog();
+            tl.setProjectId(projectId);
+            tl.setNodeName(nodeName);
+            tl.setStatus("completed");
+            tl.setMessage(NODE_MESSAGES.getOrDefault(nodeName, "执行 " + nodeName));
+            thinkingLogRepository.save(tl);
+        }
     }
 
     @Transactional
     public void logFailed(String projectId, String nodeName, String error) {
-        ThinkingLog log = new ThinkingLog();
-        log.setProjectId(projectId);
-        log.setNodeName(nodeName);
-        log.setStatus("failed");
-        log.setMessage(NODE_MESSAGES.getOrDefault(nodeName, "执行 " + nodeName) + " 失败: " + error);
-        thinkingLogRepository.save(log);
+        Optional<ThinkingLog> existing = thinkingLogRepository
+            .findTopByProjectIdAndNodeNameOrderByCreatedAtDesc(projectId, nodeName);
+
+        if (existing.isPresent()) {
+            ThinkingLog tl = existing.get();
+            tl.setStatus("failed");
+            tl.setMessage(NODE_MESSAGES.getOrDefault(nodeName, "执行 " + nodeName) + " 失败: " + error);
+            thinkingLogRepository.save(tl);
+        } else {
+            ThinkingLog tl = new ThinkingLog();
+            tl.setProjectId(projectId);
+            tl.setNodeName(nodeName);
+            tl.setStatus("failed");
+            tl.setMessage(NODE_MESSAGES.getOrDefault(nodeName, "执行 " + nodeName) + " 失败: " + error);
+            thinkingLogRepository.save(tl);
+        }
     }
 
     @Transactional(readOnly = true)

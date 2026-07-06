@@ -85,10 +85,13 @@ class EmbeddingClient:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def _default_provider(self) -> EmbeddingProvider:
-        provider = settings.embedding_provider.lower()
-        if provider == "zhipu":
-            return ZhipuEmbeddingProvider()
-        return OllamaEmbeddingProvider()
+        try:
+            provider = settings.embedding_provider.lower()
+            if provider == "zhipu":
+                return ZhipuEmbeddingProvider()
+            return OllamaEmbeddingProvider()
+        except Exception:
+            return None
 
     def _cache_key(self, text: str) -> str:
         return hashlib.md5(text.encode("utf-8")).hexdigest()
@@ -97,6 +100,9 @@ class EmbeddingClient:
         return self.cache_dir / f"{key}.json"
 
     async def embed(self, text: str, use_cache: bool = True) -> list[float]:
+        if not self.provider:
+            raise ValueError("Embedding provider not configured")
+        
         if use_cache:
             key = self._cache_key(text)
             cache_file = self._cache_path(key)

@@ -115,7 +115,7 @@ class ZhipuProvider(LLMProvider):
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
-        self.client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
+        self.client = httpx.AsyncClient(timeout=httpx.Timeout(180.0))
 
     def _build_messages(self, system_prompt: str, user_prompt: str) -> list[dict]:
         messages = []
@@ -145,7 +145,7 @@ class ZhipuProvider(LLMProvider):
                 f"{self.base_url}/chat/completions",
                 json=payload,
                 headers={"Authorization": f"Bearer {self.api_key}"},
-                timeout=60.0,
+                timeout=180.0,
             )
             print(f"DEBUG: Zhipu response status: {resp.status_code}")
             resp.raise_for_status()

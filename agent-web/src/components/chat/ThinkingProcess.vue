@@ -14,7 +14,7 @@
     <div v-show="expanded" class="thinking-body">
       <div
         v-for="log in logs"
-        :key="log.id"
+        :key="log.nodeName || log.node_name || log.id"
         class="thinking-item"
         :class="log.status"
       >
@@ -36,7 +36,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Loading, Opportunity, ArrowDown, Check, Close } from '@element-plus/icons-vue'
 
 const props = defineProps({
@@ -44,7 +44,14 @@ const props = defineProps({
   isRunning: { type: Boolean, default: false },
 })
 
-const expanded = ref(true)
+// 思考中默认展开，非运行状态默认折叠；完成后自动收起
+const expanded = ref(props.isRunning)
+
+watch(() => props.isRunning, (running, wasRunning) => {
+  if (wasRunning && !running) {
+    expanded.value = false
+  }
+})
 
 const completedSteps = computed(() => props.logs.filter(l => l.status === 'completed').length)
 
