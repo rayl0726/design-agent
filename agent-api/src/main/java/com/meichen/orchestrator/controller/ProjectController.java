@@ -8,6 +8,7 @@ import com.meichen.orchestrator.service.SessionMessageService;
 import com.meichen.orchestrator.service.DialogueService;
 import com.meichen.orchestrator.service.ThinkingLogService;
 import com.meichen.orchestrator.service.WorkflowService;
+import com.meichen.orchestrator.security.CurrentUser;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -41,8 +42,8 @@ public class ProjectController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Project>> listProjects() {
-        return ResponseEntity.ok(projectRepository.findAll());
+    public ResponseEntity<List<Project>> listProjects(@CurrentUser Long userId) {
+        return ResponseEntity.ok(projectRepository.findByUserIdOrderByCreatedAtDesc(userId));
     }
 
     @PostMapping(consumes = "multipart/form-data")
@@ -54,7 +55,8 @@ public class ProjectController {
         @RequestParam(value = "cad", required = false) MultipartFile cad,
         @RequestParam(value = "pdf", required = false) MultipartFile pdf,
         @RequestParam(value = "ppt", required = false) MultipartFile ppt,
-        @RequestParam(value = "references", required = false) List<MultipartFile> references
+        @RequestParam(value = "references", required = false) List<MultipartFile> references,
+        @CurrentUser Long userId
     ) {
         Map<String, Object> inputs = new HashMap<>();
         inputs.put("text", text);
@@ -64,12 +66,13 @@ public class ProjectController {
         inputs.put("ppt_present", ppt != null);
         inputs.put("reference_count", references != null ? references.size() : 0);
 
-        Project project = workflowService.createProject(name, description, inputs);
+        Project project = workflowService.createProject(name, description, inputs, userId);
         return ResponseEntity.ok(project);
     }
 
     @PostMapping(consumes = "application/json")
-    public ResponseEntity<Project> createProjectJson(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<Project> createProjectJson(@RequestBody Map<String, Object> body,
+                                                     @CurrentUser Long userId) {
         String name = (String) body.get("name");
         if (name == null || name.isEmpty()) {
             name = "未命名项目";
@@ -125,7 +128,7 @@ public class ProjectController {
             inputs.put("reference_count", 0);
         }
 
-        Project project = workflowService.createProject(name, description, inputs);
+        Project project = workflowService.createProject(name, description, inputs, userId);
         return ResponseEntity.ok(project);
     }
 
@@ -153,8 +156,8 @@ public class ProjectController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Project> getProject(@PathVariable("id") String projectId) {
-        return projectRepository.findById(projectId)
+    public ResponseEntity<Project> getProject(@PathVariable("id") String projectId, @CurrentUser Long userId) {
+        return projectRepository.findByIdAndUserId(projectId, userId)
             .map(ResponseEntity::ok)
             .orElse(ResponseEntity.notFound().build());
     }

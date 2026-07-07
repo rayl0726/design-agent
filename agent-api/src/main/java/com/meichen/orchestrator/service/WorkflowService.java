@@ -58,11 +58,12 @@ public class WorkflowService {
     }
 
     @Transactional
-    public Project createProject(String name, String description, Map<String, Object> inputs) {
+    public Project createProject(String name, String description, Map<String, Object> inputs, Long userId) {
         Project project = new Project();
         project.setId(UUID.randomUUID().toString());
         project.setName(name);
         project.setDescription(description);
+        project.setUserId(userId);
         project.setStatus("INIT");
         project.setRawInputsJson(toJson(inputs));
         project = projectRepository.save(project);
