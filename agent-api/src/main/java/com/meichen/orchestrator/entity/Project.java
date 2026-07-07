@@ -56,6 +56,9 @@ public class Project {
     @Column(length = 500)
     private String l3HtmlPath;
 
+    @Column(name = "user_id")
+    private Long userId;
+
     @CreationTimestamp
     private LocalDateTime createdAt;
 
@@ -108,6 +111,9 @@ public class Project {
 
     public String getL3HtmlPath() { return l3HtmlPath; }
     public void setL3HtmlPath(String l3HtmlPath) { this.l3HtmlPath = l3HtmlPath; }
+
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

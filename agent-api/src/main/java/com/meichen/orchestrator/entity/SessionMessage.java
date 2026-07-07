@@ -33,6 +33,9 @@ public class SessionMessage {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @Column(name = "user_id")
+    private Long userId;
+
     public SessionMessage() {}
 
     public static SessionMessage create(String projectId, String role, String messageType, String content) {
@@ -45,6 +48,9 @@ public class SessionMessage {
         msg.setCreatedAt(LocalDateTime.now());
         return msg;
     }
+
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }

@@ -44,6 +44,9 @@ public class Feedback {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @Column(name = "user_id")
+    private Long userId;
+
     public Feedback() {}
 
     public static Feedback create(String projectId, String feedbackType, Integer ideaIndex,
@@ -91,4 +94,7 @@ public class Feedback {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
 }
