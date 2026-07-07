@@ -10,6 +10,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -74,24 +75,32 @@ class FeedbackServiceTest {
     }
 
     @Test
-    void listByProject_shouldReturnOnlyOwnFeedback() {
+    void listByProject_shouldReturnOwnFeedbackOrderedByCreatedAtDesc() {
         String projectId = "project-1";
         Long userId = 42L;
         Project project = new Project();
         project.setId(projectId);
         project.setUserId(userId);
 
-        Feedback ownFeedback = new Feedback();
-        ownFeedback.setProjectId(projectId);
-        ownFeedback.setUserId(userId);
+        Feedback olderFeedback = new Feedback();
+        olderFeedback.setProjectId(projectId);
+        olderFeedback.setUserId(userId);
+        olderFeedback.setCreatedAt(LocalDateTime.now().minusDays(1));
+
+        Feedback newerFeedback = new Feedback();
+        newerFeedback.setProjectId(projectId);
+        newerFeedback.setUserId(userId);
+        newerFeedback.setCreatedAt(LocalDateTime.now());
 
         when(projectRepository.findByIdAndUserId(projectId, userId)).thenReturn(Optional.of(project));
-        when(feedbackRepository.findByProjectIdAndUserId(projectId, userId)).thenReturn(List.of(ownFeedback));
+        when(feedbackRepository.findByProjectIdAndUserIdOrderByCreatedAtDesc(projectId, userId))
+                .thenReturn(List.of(newerFeedback, olderFeedback));
 
         List<Feedback> result = feedbackService.listByProject(projectId, userId);
 
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getUserId()).isEqualTo(userId);
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getCreatedAt()).isAfterOrEqualTo(result.get(1).getCreatedAt());
+        assertThat(result).allMatch(f -> userId.equals(f.getUserId()));
     }
 
     @Test

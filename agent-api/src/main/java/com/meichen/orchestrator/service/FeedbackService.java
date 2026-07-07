@@ -43,7 +43,7 @@ public class FeedbackService {
     @Transactional(readOnly = true)
     public List<Feedback> listByProject(String projectId, Long userId) {
         ensureProjectBelongsToUser(projectId, userId);
-        return feedbackRepository.findByProjectIdAndUserId(projectId, userId);
+        return feedbackRepository.findByProjectIdAndUserIdOrderByCreatedAtDesc(projectId, userId);
     }
 
     private Project ensureProjectBelongsToUser(String projectId, Long userId) {
