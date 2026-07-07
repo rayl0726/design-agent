@@ -143,13 +143,14 @@ public class WorkflowService {
             projectId, startNode, stopNode, targetLevel);
 
             final String finalStopNode = stopNode;
+            final Long projectUserId = project.getUserId();
         workflowExecutor.execute(() -> {
             try {
                 Map<String, Object> result = workflowEngine.execute(projectId, payload);
-                self.updateProjectStatus(projectId, result, targetLevel, finalStopNode);
+                self.updateProjectStatus(projectId, result, targetLevel, finalStopNode, projectUserId);
             } catch (Exception e) {
                 log.error("Workflow failed for project {}: {}", projectId, e.getMessage());
-                self.updateProjectFailed(projectId, e.getMessage());
+                self.updateProjectFailed(projectId, e.getMessage(), projectUserId);
             }
         });
     }
@@ -243,13 +244,14 @@ public class WorkflowService {
 
                 final String finalTargetLevel = targetLevel;
                 final String finalStopNode = stopNode;
+                final Long projectUserId = project.getUserId();
                 workflowExecutor.execute(() -> {
                     try {
                         Map<String, Object> result = workflowEngine.execute(projectId, payload);
-                        self.updateProjectStatus(projectId, result, finalTargetLevel, finalStopNode);
+                        self.updateProjectStatus(projectId, result, finalTargetLevel, finalStopNode, projectUserId);
                     } catch (Exception e) {
                         log.error("Workflow continuation failed: {}", e.getMessage());
-                        self.updateProjectFailed(projectId, e.getMessage());
+                        self.updateProjectFailed(projectId, e.getMessage(), projectUserId);
                     }
                 });
             }
@@ -277,9 +279,9 @@ public class WorkflowService {
     }
 
     @Transactional
-    public void updateProjectStatus(String projectId, Map<String, Object> result, String targetLevel, String stopNode) {
+    public void updateProjectStatus(String projectId, Map<String, Object> result, String targetLevel, String stopNode, Long userId) {
         try {
-            Project project = projectRepository.findById(projectId).orElse(null);
+            Project project = projectRepository.findByIdAndUserId(projectId, userId).orElse(null);
             if (project == null) return;
 
             log.info("updateProjectStatus called for project {}, result keys: {}", projectId, result.keySet());
@@ -343,7 +345,7 @@ public class WorkflowService {
         sseEmitterService.sendToProject(projectId, "status", finalStatus);
         } catch (Exception e) {
             log.error("updateProjectStatus failed for project {}: {}", projectId, e.getMessage(), e);
-            updateProjectFailed(projectId, e.getMessage() != null ? e.getMessage() : "保存结果失败");
+            updateProjectFailed(projectId, e.getMessage() != null ? e.getMessage() : "保存结果失败", userId);
         }
     }
 
@@ -406,8 +408,8 @@ public class WorkflowService {
     }
 
     @Transactional
-    public void updateProjectFailed(String projectId, String error) {
-        Project project = projectRepository.findById(projectId).orElse(null);
+    public void updateProjectFailed(String projectId, String error, Long userId) {
+        Project project = projectRepository.findByIdAndUserId(projectId, userId).orElse(null);
         if (project == null) return;
         project.setStatus("FAILED");
         projectRepository.save(project);
