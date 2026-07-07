@@ -30,7 +30,7 @@ agent-core:
   base-url: http://${AGENT_CORE_HOST:localhost}:${AGENT_CORE_PORT:8000}
 
 app:
-  data-dir: ${MEICHEN_DATA_DIR:/Users/liulei/private-work/design-data}
+  data-dir: ${MEICHEN_DATA_DIR:/Users/liulei/private-work/design-agent/design-data}
 
 logging:
   level:
@@ -40,3 +40,7 @@ logging:
     file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
   file:
     name: logs/agent-api.log
+
+jwt:
+  secret: ${JWT_SECRET:meichen-default-secret-key-must-be-overridden-in-production}
+  expiration-days: 30
