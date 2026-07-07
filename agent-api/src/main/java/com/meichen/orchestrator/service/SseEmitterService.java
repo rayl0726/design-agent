@@ -40,6 +40,10 @@ public class SseEmitterService {
     }
 
     public SseEmitter subscribe(String projectId, Long userId) {
+        // 先校验项目归属，避免未授权用户订阅他人项目的事件流
+        projectRepository.findByIdAndUserId(projectId, userId)
+            .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
         emitters.computeIfAbsent(projectId, k -> new CopyOnWriteArrayList<>()).add(emitter);
 
