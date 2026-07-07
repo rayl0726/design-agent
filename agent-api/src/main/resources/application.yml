@@ -42,5 +42,5 @@ logging:
     name: logs/agent-api.log
 
 jwt:
-  secret: ${JWT_SECRET:meichen-default-secret-key-must-be-overridden-in-production}
+  secret: ${JWT_SECRET}
   expiration-days: 30
