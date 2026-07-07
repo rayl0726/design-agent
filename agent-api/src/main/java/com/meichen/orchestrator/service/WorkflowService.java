@@ -74,7 +74,7 @@ public class WorkflowService {
             + "• 空间类型（购物中心 / 百货 / 快闪店 / 展厅等）\n"
             + "• 预算区间\n"
             + "• 涉及哪些点位？每个点位需要几个？";
-        sessionMessageService.addAssistantMessage(project.getId(), "text", greeting);
+        sessionMessageService.addAssistantMessage(project.getId(), "text", greeting, userId);
 
         return project;
     }
@@ -83,7 +83,7 @@ public class WorkflowService {
     public void deleteProject(String projectId) {
         Project project = projectRepository.findById(projectId)
             .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
-        sessionMessageService.addSystemMessage(projectId, "会话已删除");
+        sessionMessageService.addSystemMessage(projectId, "会话已删除", project.getUserId());
         projectRepository.delete(project);
     }
 
@@ -293,9 +293,9 @@ public class WorkflowService {
             project.setCurrentLevel("L1");
             project.setStatus("L1_PENDING");
             Object ideas = conceptDesign.get("ideas");
-            pushMessage(projectId, sessionMessageService.addAssistantMessage(projectId, "idea_gallery", toJson(ideas != null ? ideas : conceptDesign)));
+            pushMessage(projectId, sessionMessageService.addAssistantMessage(projectId, "idea_gallery", toJson(ideas != null ? ideas : conceptDesign), project.getUserId()));
             pushMessage(projectId, sessionMessageService.addAssistantMessage(projectId, "text",
-                "已为你生成 3 个创意方向。请直接回复选择第几个（如“选第3个”），我将基于该创意继续生成效果图。"));
+                "已为你生成 3 个创意方向。请直接回复选择第几个（如“选第3个”），我将基于该创意继续生成效果图。", project.getUserId()));
         }
         if ("visual_design".equals(effectiveStop) && result.containsKey("visual_design")) {
             Map<String, Object> visualDesign = (Map<String, Object>) result.get("visual_design");
@@ -306,18 +306,18 @@ public class WorkflowService {
             Object ideas = visualDesign.get("ideas");
             if (ideas instanceof List) {
                 List<Map<String, Object>> ideasWithUrls = convertImagePathsToUrls((List<Map<String, Object>>) ideas);
-                pushMessage(projectId, sessionMessageService.addAssistantMessage(projectId, "idea_gallery", toJson(ideasWithUrls)));
+                pushMessage(projectId, sessionMessageService.addAssistantMessage(projectId, "idea_gallery", toJson(ideasWithUrls), project.getUserId()));
                 pushMessage(projectId, sessionMessageService.addAssistantMessage(projectId, "text",
-                    "已为你生成 3 个创意方向及效果图。请直接回复选择第几个（如“选第3个”），我将基于该创意继续深化方案。"));
+                    "已为你生成 3 个创意方向及效果图。请直接回复选择第几个（如“选第3个”），我将基于该创意继续深化方案。", project.getUserId()));
             } else {
-                pushMessage(projectId, sessionMessageService.addAssistantMessage(projectId, "visual_scheme", project.getL2OutputJson()));
+                pushMessage(projectId, sessionMessageService.addAssistantMessage(projectId, "visual_scheme", project.getL2OutputJson(), project.getUserId()));
             }
         }
         if ("technical_design".equals(effectiveStop) && result.containsKey("technical_design")) {
             project.setL3OutputJson(toJson(result.get("technical_design")));
             project.setCurrentLevel("L3");
             project.setStatus("L3_PENDING");
-            pushMessage(projectId, sessionMessageService.addAssistantMessage(projectId, "proposal", project.getL3OutputJson()));
+            pushMessage(projectId, sessionMessageService.addAssistantMessage(projectId, "proposal", project.getL3OutputJson(), project.getUserId()));
         }
         if (result.containsKey("doc_generate")) {
             project.setStatus("COMPLETED");

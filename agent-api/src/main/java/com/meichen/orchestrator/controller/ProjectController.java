@@ -169,8 +169,9 @@ public class ProjectController {
     }
 
     @GetMapping("/{id}/messages")
-    public ResponseEntity<List<SessionMessage>> listMessages(@PathVariable("id") String projectId) {
-        return ResponseEntity.ok(sessionMessageService.listMessages(projectId));
+    public ResponseEntity<List<SessionMessage>> listMessages(@PathVariable("id") String projectId,
+                                                             @CurrentUser Long userId) {
+        return ResponseEntity.ok(sessionMessageService.listMessages(projectId, userId));
     }
 
     @GetMapping("/{id}/thinking-logs")
@@ -181,15 +182,16 @@ public class ProjectController {
     @PostMapping("/{id}/messages")
     public ResponseEntity<SessionMessage> addMessage(
         @PathVariable("id") String projectId,
-        @RequestBody Map<String, Object> body
+        @RequestBody Map<String, Object> body,
+        @CurrentUser Long userId
     ) {
         String content = (String) body.get("content");
         if (content == null || content.isBlank()) {
             throw new IllegalArgumentException("content is required");
         }
-        SessionMessage msg = sessionMessageService.addUserMessage(projectId, content);
+        SessionMessage msg = sessionMessageService.addUserMessage(projectId, content, userId);
 
-        Project project = projectRepository.findById(projectId)
+        Project project = projectRepository.findByIdAndUserId(projectId, userId)
             .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
 
         Map<String, Object> inputs;

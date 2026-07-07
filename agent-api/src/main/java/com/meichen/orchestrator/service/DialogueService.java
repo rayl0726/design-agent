@@ -52,10 +52,9 @@ public class DialogueService {
     }
 
     private void processUserMessage(String projectId, String content) {
+        Project project = projectRepository.findById(projectId)
+            .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
         try {
-            Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
-
             Map<String, Object> statusEvent = new HashMap<>();
             statusEvent.put("project_id", projectId);
             statusEvent.put("status", "PARSING");
@@ -102,7 +101,7 @@ public class DialogueService {
             if (!isComplete && missingFields != null && !missingFields.isEmpty()) {
                 String followUp = buildFollowUpQuestion(missingFields);
                 log.info("requirement incomplete, sending follow-up");
-                SessionMessage msg = sessionMessageService.addAssistantMessage(projectId, "text", followUp);
+                SessionMessage msg = sessionMessageService.addAssistantMessage(projectId, "text", followUp, project.getUserId());
                 pushMessage(projectId, msg);
                 Map<String, Object> initStatus = new HashMap<>();
                 initStatus.put("project_id", projectId);
@@ -118,7 +117,7 @@ public class DialogueService {
             if (recommendations != null && !recommendations.isEmpty()) {
                 String confirmationMsg = buildRecommendationConfirmation(requirement, recommendations);
                 log.info("has recommendations, sending confirmation request");
-                SessionMessage msg = sessionMessageService.addAssistantMessage(projectId, "text", confirmationMsg);
+                SessionMessage msg = sessionMessageService.addAssistantMessage(projectId, "text", confirmationMsg, project.getUserId());
                 pushMessage(projectId, msg);
                 project.setStatus("RECOMMENDATION_PENDING");
                 projectRepository.save(project);
@@ -134,7 +133,7 @@ public class DialogueService {
             workflowService.startWorkflow(projectId, "L2");
         } catch (Exception e) {
             log.error("Dialogue processing failed for project {}: {}", projectId, e.getMessage(), e);
-            SessionMessage msg = sessionMessageService.addAssistantMessage(projectId, "text", "抱歉，处理你的需求时出错了，请再试一次。");
+            SessionMessage msg = sessionMessageService.addAssistantMessage(projectId, "text", "抱歉，处理你的需求时出错了，请再试一次。", project.getUserId());
             pushMessage(projectId, msg);
             sseEmitterService.sendToProject(projectId, "status", Map.of(
                 "project_id", projectId,

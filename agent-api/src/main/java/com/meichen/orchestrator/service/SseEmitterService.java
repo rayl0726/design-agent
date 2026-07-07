@@ -66,6 +66,7 @@ public class SseEmitterService {
     public void sendHistory(String projectId, SseEmitter emitter) {
         try {
             Project project = projectRepository.findById(projectId).orElse(null);
+            Long userId = project != null ? project.getUserId() : null;
             if (project != null) {
                 Map<String, Object> statusEvent = new HashMap<>();
                 statusEvent.put("project_id", projectId);
@@ -74,7 +75,9 @@ public class SseEmitterService {
                 sendEvent(emitter, "status", statusEvent);
             }
 
-            List<SessionMessage> messages = sessionMessageService.listMessages(projectId);
+            List<SessionMessage> messages = userId != null
+                ? sessionMessageService.listMessages(projectId, userId)
+                : List.of();
             for (SessionMessage msg : messages) {
                 Map<String, Object> event = new HashMap<>();
                 event.put("id", msg.getId() != null ? msg.getId() : "");

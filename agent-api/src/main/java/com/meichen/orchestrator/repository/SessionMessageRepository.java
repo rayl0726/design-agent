@@ -9,4 +9,6 @@ import java.util.List;
 @Repository
 public interface SessionMessageRepository extends JpaRepository<SessionMessage, String> {
     List<SessionMessage> findByProjectIdOrderByCreatedAtAsc(String projectId);
+
+    List<SessionMessage> findByProjectIdAndUserIdOrderByCreatedAtAsc(String projectId, Long userId);
 }
