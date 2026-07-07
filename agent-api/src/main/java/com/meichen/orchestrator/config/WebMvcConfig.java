@@ -1,19 +1,33 @@
 package com.meichen.orchestrator.config;
 
+import com.meichen.orchestrator.security.CurrentUserArgumentResolver;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
 
-    @Value("${app.data-dir:/Users/liulei/private-work/design-data}")
+    @Value("${app.data-dir:/Users/liulei/private-work/design-agent/design-data}")
     private String dataDir;
+
+    private final CurrentUserArgumentResolver currentUserArgumentResolver;
+
+    public WebMvcConfig(CurrentUserArgumentResolver currentUserArgumentResolver) {
+        this.currentUserArgumentResolver = currentUserArgumentResolver;
+    }
+
+    @Override
+    public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
+        resolvers.add(currentUserArgumentResolver);
+    }
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
