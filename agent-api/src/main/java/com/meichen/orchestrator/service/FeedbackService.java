@@ -4,6 +4,7 @@ import com.meichen.orchestrator.entity.Feedback;
 import com.meichen.orchestrator.entity.Project;
 import com.meichen.orchestrator.repository.FeedbackRepository;
 import com.meichen.orchestrator.repository.ProjectRepository;
+import com.meichen.orchestrator.util.PublicIdGenerator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,10 +16,12 @@ public class FeedbackService {
 
     private final FeedbackRepository feedbackRepository;
     private final ProjectRepository projectRepository;
+    private final PublicIdGenerator publicIdGenerator;
 
-    public FeedbackService(FeedbackRepository feedbackRepository, ProjectRepository projectRepository) {
+    public FeedbackService(FeedbackRepository feedbackRepository, ProjectRepository projectRepository, PublicIdGenerator publicIdGenerator) {
         this.feedbackRepository = feedbackRepository;
         this.projectRepository = projectRepository;
+        this.publicIdGenerator = publicIdGenerator;
     }
 
     @Transactional
@@ -37,7 +40,7 @@ public class FeedbackService {
             projectId, feedbackType, ideaIndex, pointName, imageIndex, imageUrl, tag, comment
         );
         feedback.setUserId(userId);
-        return feedbackRepository.save(feedback);
+        return publicIdGenerator.assignAndSave(feedback, Feedback::setPublicId, feedbackRepository::save);
     }
 
     @Transactional(readOnly = true)

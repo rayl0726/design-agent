@@ -1,8 +1,11 @@
 package com.meichen.orchestrator.util;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
 import java.security.SecureRandom;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 /**
  * Generates opaque, URL-safe public resource identifiers.
@@ -35,5 +38,31 @@ public class PublicIdGenerator {
             id[i] = ALPHABET.charAt(secureRandom.nextInt(ALPHABET_SIZE));
         }
         return new String(id);
+    }
+
+    /**
+     * Assigns a fresh public ID to the entity and persists it, retrying up to
+     * two additional times if the unique {@code public_id} constraint is violated.
+     *
+     * @param entity entity to persist
+     * @param publicIdSetter setter that receives the entity and the generated public ID
+     * @param saver function that persists the entity and returns the persisted instance
+     * @param <T> entity type
+     * @return the persisted entity
+     * @throws DataIntegrityViolationException if all attempts fail
+     */
+    public <T> T assignAndSave(T entity, BiConsumer<T, String> publicIdSetter, Function<T, T> saver) {
+        int maxAttempts = 3;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            publicIdSetter.accept(entity, generate());
+            try {
+                return saver.apply(entity);
+            } catch (DataIntegrityViolationException e) {
+                if (attempt == maxAttempts) {
+                    throw e;
+                }
+            }
+        }
+        throw new IllegalStateException("Failed to assign a unique public ID after " + maxAttempts + " attempts");
     }
 }

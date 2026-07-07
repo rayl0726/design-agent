@@ -59,6 +59,9 @@ public class Project {
     @Column(name = "user_id")
     private Long userId;
 
+    @Column(name = "public_id", unique = true, nullable = false, length = 32)
+    private String publicId;
+
     @CreationTimestamp
     private LocalDateTime createdAt;
 
@@ -114,6 +117,9 @@ public class Project {
 
     public Long getUserId() { return userId; }
     public void setUserId(Long userId) { this.userId = userId; }
+
+    public String getPublicId() { return publicId; }
+    public void setPublicId(String publicId) { this.publicId = publicId; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

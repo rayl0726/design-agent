@@ -30,6 +30,9 @@ public class ThinkingLog {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
+    @Column(name = "public_id", unique = true, nullable = false, length = 32)
+    private String publicId;
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
 
@@ -44,6 +47,9 @@ public class ThinkingLog {
 
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message; }
+
+    public String getPublicId() { return publicId; }
+    public void setPublicId(String publicId) { this.publicId = publicId; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

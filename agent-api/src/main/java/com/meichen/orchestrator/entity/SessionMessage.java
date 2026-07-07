@@ -36,6 +36,9 @@ public class SessionMessage {
     @Column(name = "user_id")
     private Long userId;
 
+    @Column(name = "public_id", unique = true, nullable = false, length = 32)
+    private String publicId;
+
     public SessionMessage() {}
 
     public static SessionMessage create(String projectId, String role, String messageType, String content) {
@@ -51,6 +54,9 @@ public class SessionMessage {
 
     public Long getUserId() { return userId; }
     public void setUserId(Long userId) { this.userId = userId; }
+
+    public String getPublicId() { return publicId; }
+    public void setPublicId(String publicId) { this.publicId = publicId; }
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }

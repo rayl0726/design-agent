@@ -12,4 +12,8 @@ public interface ThinkingLogRepository extends JpaRepository<ThinkingLog, String
     List<ThinkingLog> findByProjectIdOrderByCreatedAtAsc(String projectId);
 
     Optional<ThinkingLog> findTopByProjectIdAndNodeNameOrderByCreatedAtDesc(String projectId, String nodeName);
+
+    Optional<ThinkingLog> findByPublicId(String publicId);
+
+    Optional<ThinkingLog> findByPublicIdAndUserId(String publicId, Long userId);
 }

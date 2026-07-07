@@ -5,6 +5,7 @@ import com.meichen.orchestrator.entity.SessionMessage;
 import com.meichen.orchestrator.entity.WorkflowLog;
 import com.meichen.orchestrator.repository.ProjectRepository;
 import com.meichen.orchestrator.repository.WorkflowLogRepository;
+import com.meichen.orchestrator.util.PublicIdGenerator;
 import com.meichen.orchestrator.workflow.WorkflowEngine;
 import com.meichen.orchestrator.workflow.WorkflowDefinition;
 import org.slf4j.Logger;
@@ -35,6 +36,7 @@ public class WorkflowService {
     private final SessionMessageService sessionMessageService;
     private final SseEmitterService sseEmitterService;
     private final Executor workflowExecutor;
+    private final PublicIdGenerator publicIdGenerator;
 
     @Autowired
     @Lazy
@@ -47,7 +49,8 @@ public class WorkflowService {
                            SessionMessageService sessionMessageService,
                            SseEmitterService sseEmitterService,
                            @Qualifier("workflowExecutor") Executor workflowExecutor,
-                           @Value("${agent-core.base-url:http://localhost:8000}") String agentCoreBaseUrl) {
+                           @Value("${agent-core.base-url:http://localhost:8000}") String agentCoreBaseUrl,
+                           PublicIdGenerator publicIdGenerator) {
         this.projectRepository = projectRepository;
         this.logRepository = logRepository;
         this.workflowEngine = workflowEngine;
@@ -55,6 +58,7 @@ public class WorkflowService {
         this.sseEmitterService = sseEmitterService;
         this.workflowExecutor = workflowExecutor;
         this.webClient = webClientBuilder.baseUrl(agentCoreBaseUrl).build();
+        this.publicIdGenerator = publicIdGenerator;
     }
 
     @Transactional
@@ -66,7 +70,7 @@ public class WorkflowService {
         project.setUserId(userId);
         project.setStatus("INIT");
         project.setRawInputsJson(toJson(inputs));
-        project = projectRepository.save(project);
+        project = publicIdGenerator.assignAndSave(project, Project::setPublicId, projectRepository::save);
 
         String greeting = "你好！我是你的美陈设计助手。\n"
             + "请告诉我：\n"

@@ -2,6 +2,7 @@ package com.meichen.orchestrator.service;
 
 import com.meichen.orchestrator.entity.ThinkingLog;
 import com.meichen.orchestrator.repository.ThinkingLogRepository;
+import com.meichen.orchestrator.util.PublicIdGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -32,9 +33,11 @@ public class ThinkingLogService {
     }
 
     private final ThinkingLogRepository thinkingLogRepository;
+    private final PublicIdGenerator publicIdGenerator;
 
-    public ThinkingLogService(ThinkingLogRepository thinkingLogRepository) {
+    public ThinkingLogService(ThinkingLogRepository thinkingLogRepository, PublicIdGenerator publicIdGenerator) {
         this.thinkingLogRepository = thinkingLogRepository;
+        this.publicIdGenerator = publicIdGenerator;
     }
 
     @Transactional
@@ -42,19 +45,19 @@ public class ThinkingLogService {
         Optional<ThinkingLog> existing = thinkingLogRepository
             .findTopByProjectIdAndNodeNameOrderByCreatedAtDesc(projectId, nodeName);
 
-        ThinkingLog tl;
         if (existing.isPresent()) {
-            tl = existing.get();
+            ThinkingLog tl = existing.get();
             tl.setStatus("started");
             tl.setMessage(NODE_MESSAGES.getOrDefault(nodeName, "执行 " + nodeName));
+            thinkingLogRepository.save(tl);
         } else {
-            tl = new ThinkingLog();
+            ThinkingLog tl = new ThinkingLog();
             tl.setProjectId(projectId);
             tl.setNodeName(nodeName);
             tl.setStatus("started");
             tl.setMessage(NODE_MESSAGES.getOrDefault(nodeName, "执行 " + nodeName));
+            publicIdGenerator.assignAndSave(tl, ThinkingLog::setPublicId, thinkingLogRepository::save);
         }
-        thinkingLogRepository.save(tl);
     }
 
     @Transactional
@@ -73,7 +76,7 @@ public class ThinkingLogService {
             tl.setNodeName(nodeName);
             tl.setStatus("completed");
             tl.setMessage(NODE_MESSAGES.getOrDefault(nodeName, "执行 " + nodeName));
-            thinkingLogRepository.save(tl);
+            publicIdGenerator.assignAndSave(tl, ThinkingLog::setPublicId, thinkingLogRepository::save);
         }
     }
 
@@ -93,7 +96,7 @@ public class ThinkingLogService {
             tl.setNodeName(nodeName);
             tl.setStatus("failed");
             tl.setMessage(NODE_MESSAGES.getOrDefault(nodeName, "执行 " + nodeName) + " 失败: " + error);
-            thinkingLogRepository.save(tl);
+            publicIdGenerator.assignAndSave(tl, ThinkingLog::setPublicId, thinkingLogRepository::save);
         }
     }
 

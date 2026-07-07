@@ -4,6 +4,7 @@ import com.meichen.orchestrator.entity.Project;
 import com.meichen.orchestrator.entity.SessionMessage;
 import com.meichen.orchestrator.repository.ProjectRepository;
 import com.meichen.orchestrator.repository.SessionMessageRepository;
+import com.meichen.orchestrator.util.PublicIdGenerator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,11 +15,14 @@ public class SessionMessageService {
 
     private final SessionMessageRepository messageRepository;
     private final ProjectRepository projectRepository;
+    private final PublicIdGenerator publicIdGenerator;
 
     public SessionMessageService(SessionMessageRepository messageRepository,
-                                  ProjectRepository projectRepository) {
+                                  ProjectRepository projectRepository,
+                                  PublicIdGenerator publicIdGenerator) {
         this.messageRepository = messageRepository;
         this.projectRepository = projectRepository;
+        this.publicIdGenerator = publicIdGenerator;
     }
 
     @Transactional(readOnly = true)
@@ -32,8 +36,7 @@ public class SessionMessageService {
         ensureProjectBelongsToUser(projectId, userId);
         SessionMessage msg = SessionMessage.create(projectId, "user", "text", content);
         msg.setUserId(userId);
-        SessionMessage saved = messageRepository.save(msg);
-        return saved;
+        return publicIdGenerator.assignAndSave(msg, SessionMessage::setPublicId, messageRepository::save);
     }
 
     @Transactional
@@ -41,14 +44,14 @@ public class SessionMessageService {
         ensureProjectBelongsToUser(projectId, userId);
         SessionMessage msg = SessionMessage.create(projectId, "assistant", messageType, content);
         msg.setUserId(userId);
-        return messageRepository.save(msg);
+        return publicIdGenerator.assignAndSave(msg, SessionMessage::setPublicId, messageRepository::save);
     }
 
     @Transactional
     public void addSystemMessage(String projectId, String content, Long userId) {
         SessionMessage msg = SessionMessage.create(projectId, "system", "text", content);
         msg.setUserId(userId);
-        messageRepository.save(msg);
+        publicIdGenerator.assignAndSave(msg, SessionMessage::setPublicId, messageRepository::save);
     }
 
     private Project ensureProjectBelongsToUser(String projectId, Long userId) {

@@ -4,6 +4,7 @@ import com.meichen.orchestrator.entity.Feedback;
 import com.meichen.orchestrator.entity.Project;
 import com.meichen.orchestrator.repository.FeedbackRepository;
 import com.meichen.orchestrator.repository.ProjectRepository;
+import com.meichen.orchestrator.util.PublicIdGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,10 +31,12 @@ class FeedbackServiceTest {
     private ProjectRepository projectRepository;
 
     private FeedbackService feedbackService;
+    private PublicIdGenerator publicIdGenerator;
 
     @BeforeEach
     void setUp() {
-        feedbackService = new FeedbackService(feedbackRepository, projectRepository);
+        publicIdGenerator = new PublicIdGenerator();
+        feedbackService = new FeedbackService(feedbackRepository, projectRepository, publicIdGenerator);
     }
 
     @Test
