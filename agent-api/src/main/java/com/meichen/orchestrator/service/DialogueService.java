@@ -64,7 +64,7 @@ public class DialogueService {
             // 检查是否是确认消息
             if ("RECOMMENDATION_PENDING".equals(project.getStatus()) && isConfirmationMessage(content)) {
                 log.info("User confirmed recommendations, starting workflow");
-                workflowService.startWorkflow(projectId, "L2");
+                workflowService.startWorkflow(projectId, "L2", userId);
                 return;
             }
 
@@ -130,7 +130,7 @@ public class DialogueService {
             }
 
             // 7. 完整且无推荐确认则启动 L2 工作流：直接生成带效果图的创意方案
-            workflowService.startWorkflow(projectId, "L2");
+            workflowService.startWorkflow(projectId, "L2", userId);
         } catch (Exception e) {
             log.error("Dialogue processing failed for project {}: {}", projectId, e.getMessage(), e);
             SessionMessage msg = sessionMessageService.addAssistantMessage(projectId, "text", "抱歉，处理你的需求时出错了，请再试一次。", project.getUserId());

@@ -135,22 +135,24 @@ public class ProjectController {
     @PostMapping("/{id}/workflow/start")
     public ResponseEntity<Map<String, String>> startWorkflow(
         @PathVariable("id") String projectId,
-        @RequestParam(value = "level", defaultValue = "L3") String level
+        @RequestParam(value = "level", defaultValue = "L3") String level,
+        @CurrentUser Long userId
     ) {
-        workflowService.startWorkflow(projectId, level);
+        workflowService.startWorkflow(projectId, level, userId);
         return ResponseEntity.ok(Map.of("status", "started", "project_id", projectId));
     }
 
     @PostMapping("/{id}/workflow/confirm")
     public ResponseEntity<Map<String, String>> confirmCheckpoint(
         @PathVariable("id") String projectId,
-        @RequestBody Map<String, Object> body
+        @RequestBody Map<String, Object> body,
+        @CurrentUser Long userId
     ) {
         String level = (String) body.get("level");
         Boolean approved = (Boolean) body.get("approved");
         String feedback = (String) body.get("feedback");
         
-        workflowService.confirmCheckpoint(projectId, level, approved != null && approved, feedback);
+        workflowService.confirmCheckpoint(projectId, level, approved != null && approved, feedback, userId);
         String msg = approved != null && approved ? "confirmed" : "rejected";
         return ResponseEntity.ok(Map.of("status", msg, "project_id", projectId));
     }
@@ -163,8 +165,9 @@ public class ProjectController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, String>> deleteProject(@PathVariable("id") String projectId) {
-        workflowService.deleteProject(projectId);
+    public ResponseEntity<Map<String, String>> deleteProject(@PathVariable("id") String projectId,
+                                                             @CurrentUser Long userId) {
+        workflowService.deleteProject(projectId, userId);
         return ResponseEntity.ok(Map.of("status", "deleted", "project_id", projectId));
     }
 
@@ -177,8 +180,11 @@ public class ProjectController {
     }
 
     @GetMapping("/{id}/thinking-logs")
-    public ResponseEntity<List<ThinkingLog>> listThinkingLogs(@PathVariable("id") String projectId) {
-        return ResponseEntity.ok(thinkingLogService.listByProject(projectId));
+    public ResponseEntity<List<ThinkingLog>> listThinkingLogs(@PathVariable("id") String projectId,
+                                                              @CurrentUser Long userId) {
+        return projectRepository.findByIdAndUserId(projectId, userId)
+            .map(p -> ResponseEntity.ok(thinkingLogService.listByProject(projectId)))
+            .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping("/{id}/messages")
@@ -215,32 +221,35 @@ public class ProjectController {
             dialogueService.handleUserMessage(projectId, content, userId);
         } else if ("L1_PENDING".equals(status)) {
             // 旧流程兼容：直接生成视觉方案
-            workflowService.startWorkflow(projectId, "L2");
+            workflowService.startWorkflow(projectId, "L2", userId);
         } else if ("L2_PENDING".equals(status)) {
             // 已展示带图创意，用户选择后进入 L3 技术方案
-            workflowService.startWorkflow(projectId, "L3");
+            workflowService.startWorkflow(projectId, "L3", userId);
         } else if ("L3_PENDING".equals(status)) {
-            workflowService.startWorkflow(projectId, "L3");
+            workflowService.startWorkflow(projectId, "L3", userId);
         }
 
         return ResponseEntity.ok(msg);
     }
 
     @GetMapping("/{id}/status")
-    public ResponseEntity<Map<String, Object>> getStatus(@PathVariable("id") String projectId) {
-        return ResponseEntity.ok(workflowService.getStatus(projectId));
+    public ResponseEntity<Map<String, Object>> getStatus(@PathVariable("id") String projectId,
+                                                         @CurrentUser Long userId) {
+        return ResponseEntity.ok(workflowService.getStatus(projectId, userId));
     }
 
     @GetMapping("/{id}/export")
     public ResponseEntity<Map<String, String>> exportDocument(
         @PathVariable("id") String projectId,
-        @RequestParam("format") String format
+        @RequestParam("format") String format,
+        @CurrentUser Long userId
     ) {
-        // 实际实现需调用 Python AI 服务生成文档
-        return ResponseEntity.ok(Map.of(
-            "project_id", projectId,
-            "format", format,
-            "url", "/data/uploads/" + projectId + "/L3_方案." + format
-        ));
+        return projectRepository.findByIdAndUserId(projectId, userId)
+            .map(p -> ResponseEntity.ok(Map.of(
+                "project_id", projectId,
+                "format", format,
+                "url", "/data/uploads/" + projectId + "/L3_方案." + format
+            )))
+            .orElse(ResponseEntity.notFound().build());
     }
 }

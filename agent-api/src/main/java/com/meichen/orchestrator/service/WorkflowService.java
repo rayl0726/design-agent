@@ -80,16 +80,16 @@ public class WorkflowService {
     }
 
     @Transactional
-    public void deleteProject(String projectId) {
-        Project project = projectRepository.findById(projectId)
+    public void deleteProject(String projectId, Long userId) {
+        Project project = projectRepository.findByIdAndUserId(projectId, userId)
             .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
         sessionMessageService.addSystemMessage(projectId, "会话已删除", project.getUserId());
         projectRepository.delete(project);
     }
 
     @Transactional
-    public void startWorkflow(String projectId, String targetLevel) {
-        Project project = projectRepository.findById(projectId)
+    public void startWorkflow(String projectId, String targetLevel, Long userId) {
+        Project project = projectRepository.findByIdAndUserId(projectId, userId)
             .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
 
         project.setStatus("PARSING");
@@ -191,8 +191,8 @@ public class WorkflowService {
     }
 
     @Transactional
-    public void confirmCheckpoint(String projectId, String level, boolean approved, String feedback) {
-        Project project = projectRepository.findById(projectId)
+    public void confirmCheckpoint(String projectId, String level, boolean approved, String feedback, Long userId) {
+        Project project = projectRepository.findByIdAndUserId(projectId, userId)
             .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
 
         String nextStatus = approved ? level + "_CONFIRMED" : level + "_REJECTED";
@@ -256,8 +256,8 @@ public class WorkflowService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> getStatus(String projectId) {
-        Project project = projectRepository.findById(projectId)
+    public Map<String, Object> getStatus(String projectId, Long userId) {
+        Project project = projectRepository.findByIdAndUserId(projectId, userId)
             .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
 
         List<WorkflowLog> logs = logRepository.findByProjectIdOrderByCreatedAtAsc(projectId);
