@@ -39,7 +39,7 @@ public class SseEmitterService {
         this.objectMapper = objectMapper;
     }
 
-    public SseEmitter subscribe(String projectId) {
+    public SseEmitter subscribe(String projectId, Long userId) {
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
         emitters.computeIfAbsent(projectId, k -> new CopyOnWriteArrayList<>()).add(emitter);
 
@@ -48,7 +48,7 @@ public class SseEmitterService {
         emitter.onError(e -> removeEmitter(projectId, emitter));
 
         // 补推历史状态、消息和思考记录
-        sendHistory(projectId, emitter);
+        sendHistory(projectId, emitter, userId);
 
         return emitter;
     }
@@ -63,10 +63,9 @@ public class SseEmitterService {
         }
     }
 
-    public void sendHistory(String projectId, SseEmitter emitter) {
+    public void sendHistory(String projectId, SseEmitter emitter, Long userId) {
         try {
-            Project project = projectRepository.findById(projectId).orElse(null);
-            Long userId = project != null ? project.getUserId() : null;
+            Project project = projectRepository.findByIdAndUserId(projectId, userId).orElse(null);
             if (project != null) {
                 Map<String, Object> statusEvent = new HashMap<>();
                 statusEvent.put("project_id", projectId);

@@ -1,5 +1,6 @@
 package com.meichen.orchestrator.controller;
 
+import com.meichen.orchestrator.security.CurrentUser;
 import com.meichen.orchestrator.service.SseEmitterService;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,7 +20,7 @@ public class SseController {
     }
 
     @GetMapping(value = "/{id}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter subscribe(@PathVariable("id") String projectId) {
-        return sseEmitterService.subscribe(projectId);
+    public SseEmitter subscribe(@PathVariable("id") String projectId, @CurrentUser Long userId) {
+        return sseEmitterService.subscribe(projectId, userId);
     }
 }

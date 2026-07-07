@@ -47,12 +47,12 @@ public class DialogueService {
         this.dialogueExecutor = dialogueExecutor;
     }
 
-    public void handleUserMessage(String projectId, String content) {
-        dialogueExecutor.execute(() -> processUserMessage(projectId, content));
+    public void handleUserMessage(String projectId, String content, Long userId) {
+        dialogueExecutor.execute(() -> processUserMessage(projectId, content, userId));
     }
 
-    private void processUserMessage(String projectId, String content) {
-        Project project = projectRepository.findById(projectId)
+    private void processUserMessage(String projectId, String content, Long userId) {
+        Project project = projectRepository.findByIdAndUserId(projectId, userId)
             .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
         try {
             Map<String, Object> statusEvent = new HashMap<>();

@@ -212,7 +212,7 @@ public class ProjectController {
 
         String status = project.getStatus();
         if ("INIT".equals(status) || "RECOMMENDATION_PENDING".equals(status)) {
-            dialogueService.handleUserMessage(projectId, content);
+            dialogueService.handleUserMessage(projectId, content, userId);
         } else if ("L1_PENDING".equals(status)) {
             // 旧流程兼容：直接生成视觉方案
             workflowService.startWorkflow(projectId, "L2");
