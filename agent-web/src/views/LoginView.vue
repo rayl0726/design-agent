@@ -81,6 +81,20 @@ const countdown = ref(0)
 
 let timer = null
 
+const PHONE_REGEX = /^1[3-9]\d{9}$/
+
+function validatePhone() {
+  if (!form.phone) {
+    ElMessage.warning('请输入手机号')
+    return false
+  }
+  if (!PHONE_REGEX.test(form.phone)) {
+    ElMessage.error('手机号格式不正确，请输入中国大陆手机号')
+    return false
+  }
+  return true
+}
+
 function startCountdown() {
   countdown.value = 60
   timer = setInterval(() => {
@@ -93,8 +107,7 @@ function startCountdown() {
 }
 
 async function handleSendCode() {
-  if (!form.phone) {
-    ElMessage.warning('请输入手机号')
+  if (!validatePhone()) {
     return
   }
   sending.value = true
@@ -111,8 +124,11 @@ async function handleSendCode() {
 }
 
 async function handleAuth(action) {
-  if (!form.phone || !form.code) {
-    ElMessage.warning('请输入手机号和验证码')
+  if (!validatePhone()) {
+    return
+  }
+  if (!form.code) {
+    ElMessage.warning('请输入验证码')
     return
   }
   loading.value = true
