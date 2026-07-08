@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import hashlib
 import json
 from pathlib import Path
-from typing import Optional, Protocol
+from typing import Protocol, cast
 
 import httpx
 import numpy as np
@@ -28,7 +30,7 @@ class OllamaEmbeddingProvider:
         resp = await self.client.post(f"{self.base_url}/api/embeddings", json=payload)
         resp.raise_for_status()
         data = resp.json()
-        embedding = data.get("embedding")
+        embedding = cast(list[float], data.get("embedding"))
         if not embedding:
             raise ValueError(f"Ollama returned empty embedding for: {text[:50]}...")
         return embedding
@@ -62,7 +64,7 @@ class ZhipuEmbeddingProvider:
             )
             resp.raise_for_status()
             data = resp.json()
-            embedding = data.get("data", [{}])[0].get("embedding")
+            embedding = cast(list[float], data.get("data", [{}])[0].get("embedding"))
             if not embedding:
                 raise ValueError(f"Zhipu returned empty embedding for: {text[:50]}...")
             return embedding
@@ -77,14 +79,14 @@ class ZhipuEmbeddingProvider:
 class EmbeddingClient:
     def __init__(
         self,
-        provider: Optional[EmbeddingProvider] = None,
+        provider: EmbeddingProvider | None = None,
         cache_dir: str = settings.image_cache_dir,
     ):
         self.provider = provider or self._default_provider()
         self.cache_dir = Path(cache_dir).parent / "embeddings"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def _default_provider(self) -> EmbeddingProvider:
+    def _default_provider(self) -> EmbeddingProvider | None:
         try:
             provider = settings.embedding_provider.lower()
             if provider == "zhipu":
@@ -102,13 +104,13 @@ class EmbeddingClient:
     async def embed(self, text: str, use_cache: bool = True) -> list[float]:
         if not self.provider:
             raise ValueError("Embedding provider not configured")
-        
+
         if use_cache:
             key = self._cache_key(text)
             cache_file = self._cache_path(key)
             if cache_file.exists():
-                with open(cache_file, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                with open(cache_file, encoding="utf-8") as f:
+                    return cast(list[float], json.load(f))
 
         embedding = await self.provider.embed(text)
 
