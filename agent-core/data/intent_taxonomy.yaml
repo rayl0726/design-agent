@@ -1,0 +1,112 @@
+version: "1.0"
+space_types:
+  - name: "购物中心中庭"
+    aliases: ["商场中庭", "shopping mall atrium", "中庭"]
+  - name: "快闪店"
+    aliases: ["popup store", "pop-up store", "快闪", "快闪空间"]
+  - name: "百货入口"
+    aliases: ["商场入口", "百货大门", "department store entrance"]
+  - name: "步行街"
+    aliases: ["商业街", "pedestrian street"]
+  - name: "展厅"
+    aliases: ["展览厅", "exhibition hall"]
+  - name: "门店"
+    aliases: ["专卖店", "retail store"]
+  - name: "橱窗"
+    aliases: ["display window", "shop window"]
+
+points:
+  - name: "中庭"
+    aliases: ["中庭吊饰", "中庭装置"]
+  - name: "门头"
+    aliases: ["店招", "入口门头"]
+  - name: "DP点"
+    aliases: ["dp点", "display point"]
+  - name: "合影墙"
+    aliases: ["打卡墙", "photo wall"]
+  - name: "灯光画"
+    aliases: ["灯饰画", "lighting art"]
+  - name: "扶梯"
+    aliases: ["自动扶梯", "escalator"]
+  - name: "连廊"
+    aliases: ["走廊", "corridor"]
+  - name: "服务台"
+    aliases: ["咨询台", "reception"]
+  - name: "立柱"
+    aliases: ["柱子", "pillar"]
+  - name: "地贴"
+    aliases: ["地面贴画", "floor sticker"]
+  - name: "吊旗"
+    aliases: ["hanging flag"]
+  - name: "指示牌"
+    aliases: ["导视牌", "signage"]
+  - name: "花车"
+    aliases: ["促销车", "display cart"]
+  - name: "摊位"
+    aliases: ["booth", "摊位布置"]
+
+budget_levels:
+  - name: "low"
+    aliases: ["低预算", "低成本", "省钱"]
+    max_amount_cny: 100000
+  - name: "medium"
+    aliases: ["中等预算", "适中"]
+    max_amount_cny: 300000
+  - name: "high"
+    aliases: ["高预算", "高端", "豪华"]
+    max_amount_cny: 1000000
+
+styles:
+  - name: "现代简约"
+    aliases: ["简约", "modern minimal"]
+  - name: "国潮"
+    aliases: ["中国风", "新中式", "chinese trend"]
+  - name: "轻奢"
+    aliases: ["轻奢华", " affordable luxury"]
+  - name: "海洋风"
+    aliases: ["海洋主题", "summer ocean"]
+  - name: "新春"
+    aliases: ["春节", "新年", "spring festival"]
+
+materials:
+  - name: "亚克力"
+    aliases: ["acrylic"]
+  - name: "LED灯带"
+    aliases: ["灯带", "led strip"]
+  - name: "金属框架"
+    aliases: ["金属", "metal frame"]
+  - name: "玻璃"
+    aliases: ["glass"]
+  - name: "木材"
+    aliases: ["木质", "wood"]
+  - name: "泡沫雕塑"
+    aliases: ["泡沫", "foam sculpture"]
+
+field_defaults:
+  space_type:
+    required: true
+    can_inherit: false
+  budget:
+    required: true
+    can_inherit: false
+  points:
+    required: false
+    can_inherit: false
+    default_by_space_type:
+      快闪店: ["门头", "DP点", "合影墙"]
+      购物中心中庭: ["中庭", "DP点"]
+      百货入口: ["门头", "指示牌"]
+      步行街: ["DP点", "指示牌", "花车"]
+  style:
+    required: false
+    can_inherit: true
+  color_preference:
+    required: false
+    can_inherit: true
+  material_restrictions:
+    required: false
+    can_inherit: true
+  timeline:
+    required: false
+    can_inherit: false
+    default_value: "2-3周"
