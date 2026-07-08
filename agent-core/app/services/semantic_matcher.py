@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import numpy as np
@@ -7,17 +8,28 @@ import numpy as np
 from app.services.embedding_client import embedding_client
 from app.services.taxonomy_loader import Taxonomy
 
+EmbedFunc = Callable[[str], Awaitable[list[float]]]
+
 
 class SemanticMatcher:
-    def __init__(self, taxonomy: Taxonomy, threshold: float = 0.82):
+    def __init__(
+        self,
+        taxonomy: Taxonomy,
+        threshold: float = 0.82,
+        embed_func: EmbedFunc | None = None,
+    ):
         self.taxonomy = taxonomy
         self.threshold = threshold
+        self._embed_func = embed_func
         self._embedding_cache: dict[str, list[float]] = {}
 
     async def _embed(self, text: str) -> list[float]:
         if text in self._embedding_cache:
             return self._embedding_cache[text]
-        emb = await embedding_client.embed(text, use_cache=True)
+        if self._embed_func is not None:
+            emb = await self._embed_func(text)
+        else:
+            emb = await embedding_client.embed(text, use_cache=True)
         self._embedding_cache[text] = emb
         return emb
 

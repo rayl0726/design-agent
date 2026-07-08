@@ -52,5 +52,11 @@ strict = true
 warn_return_any = true
 warn_unused_configs = true
 
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests as integration tests (slow, may require external services)",
+]
+addopts = "-m 'not integration'"
+
 [tool.setuptools]
 packages = ["app"]
