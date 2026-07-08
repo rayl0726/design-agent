@@ -1,12 +1,19 @@
 from __future__ import annotations
 
-from enum import Enum
+import enum
+import sys
 from typing import Any
 
 from pydantic import BaseModel, Field
 
+if sys.version_info >= (3, 11):  # noqa: UP036
+    _FieldSourceBase = enum.StrEnum
+else:
+    class _FieldSourceBase(str, enum.Enum):  # type: ignore[misc,no-redef]  # noqa: UP042
+        pass
 
-class FieldSource(str, Enum):
+
+class FieldSource(_FieldSourceBase):
     EXACT = "exact"
     ALIAS = "alias"
     FUZZY = "fuzzy"
