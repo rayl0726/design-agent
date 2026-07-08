@@ -148,12 +148,12 @@ def main():
     parser = argparse.ArgumentParser(description="Lite enrich design cases with LLM")
     parser.add_argument(
         "--input",
-        default="/Users/liulei/private-work/design-data/temp/adesign_samples_v1.jsonl",
+        default="/Users/liulei/private-work/design-agent/design-data/temp/adesign_samples_v1.jsonl",
         help="输入 JSONL 文件路径",
     )
     parser.add_argument(
         "--output",
-        default="/Users/liulei/private-work/design-data/temp/adesign_samples_v1_enriched.jsonl",
+        default="/Users/liulei/private-work/design-agent/design-data/temp/adesign_samples_v1_enriched.jsonl",
         help="输出 JSONL 文件路径",
     )
     args = parser.parse_args()

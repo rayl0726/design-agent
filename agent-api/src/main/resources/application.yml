@@ -16,8 +16,13 @@ spring:
       idle-timeout: 600000
       max-lifetime: 1800000
       leak-detection-threshold: 60000
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
   jpa:
     database-platform: org.hibernate.dialect.MySQLDialect
+    # 目前保留 update，避免已存在的开发环境数据库因 Flyway 初次接管而中断。
+    # 后续稳定后建议切换为 validate，让 Flyway 单独负责 schema 变更。
     hibernate:
       ddl-auto: update
     show-sql: false
@@ -35,11 +40,6 @@ app:
 logging:
   level:
     com.meichen.orchestrator: INFO
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
-  file:
-    name: logs/agent-api.log
 
 jwt:
   secret: ${JWT_SECRET}

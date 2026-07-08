@@ -30,6 +30,10 @@ export const logApi = {
   agentApi: (lines = 200) => request.get(`/logs/agent-api?lines=${lines}`),
 }
 
+export const stageLogApi = {
+  list: (projectId) => request.get(`/projects/${projectId}/stages`),
+}
+
 export const authApi = {
   sendCode: (phone) => request.post('/auth/send-code', { phone }),
   login: (phone, code) => request.post('/auth/login', { phone, code }),

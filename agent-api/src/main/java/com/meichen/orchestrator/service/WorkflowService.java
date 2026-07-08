@@ -150,7 +150,7 @@ public class WorkflowService {
             final Long projectUserId = project.getUserId();
         workflowExecutor.execute(() -> {
             try {
-                Map<String, Object> result = workflowEngine.execute(projectId, payload);
+                Map<String, Object> result = workflowEngine.execute(projectId, payload, projectUserId);
                 self.updateProjectStatus(projectId, result, targetLevel, finalStopNode, projectUserId);
             } catch (Exception e) {
                 log.error("Workflow failed for project {}: {}", projectId, e.getMessage());
@@ -251,7 +251,7 @@ public class WorkflowService {
                 final Long projectUserId = project.getUserId();
                 workflowExecutor.execute(() -> {
                     try {
-                        Map<String, Object> result = workflowEngine.execute(projectId, payload);
+                        Map<String, Object> result = workflowEngine.execute(projectId, payload, projectUserId);
                         self.updateProjectStatus(projectId, result, finalTargetLevel, finalStopNode, projectUserId);
                     } catch (Exception e) {
                         log.error("Workflow continuation failed: {}", e.getMessage());

@@ -241,8 +241,11 @@ const feedbackTags = [
 function resolveImageUrl(url) {
   if (!url) return ''
   if (url.startsWith('http://') || url.startsWith('https://')) return url
-  if (url.startsWith('/')) return `${API_BASE}${url}`
-  return `${API_BASE}/images/${url}`
+  // 兼容 agent-core 早期返回的绝对本地路径，只取文件名
+  const match = url.match(/[\\/]([^\\/]+\.png|[^\\/]+\.jpg|[^\\/]+\.jpeg|[^\\/]+\.webp)$/i)
+  const fileName = match ? match[1] : url
+  if (fileName.startsWith('/')) return `${API_BASE}${fileName}`
+  return `${API_BASE}/images/${fileName}`
 }
 
 function getImageUrls(idea) {

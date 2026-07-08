@@ -1,5 +1,6 @@
 package com.meichen.orchestrator.workflow;
 
+import com.meichen.orchestrator.entity.StageLog;
 import com.meichen.orchestrator.entity.WorkflowLog;
 import com.meichen.orchestrator.repository.WorkflowLogRepository;
 import org.slf4j.Logger;
@@ -27,19 +28,38 @@ public class WorkflowEngine {
     private final WorkflowLogRepository logRepository;
     private final com.meichen.orchestrator.service.ThinkingLogService thinkingLogService;
     private final com.meichen.orchestrator.service.SseEmitterService sseEmitterService;
+    private final com.meichen.orchestrator.service.StageLogService stageLogService;
+
+    private static final Map<String, String> NODE_LABELS = Map.ofEntries(
+        Map.entry("text_parse", "解析文本输入"),
+        Map.entry("photo_parse", "解析照片输入"),
+        Map.entry("pdf_parse", "解析 PDF 输入"),
+        Map.entry("ppt_parse", "解析 PPT 输入"),
+        Map.entry("reference_parse", "解析参考图"),
+        Map.entry("cad_parse", "解析 CAD 输入"),
+        Map.entry("input_merge", "合并多模态输入"),
+        Map.entry("knowledge_retrieve", "检索设计知识库"),
+        Map.entry("requirement_analyze", "分析设计需求"),
+        Map.entry("concept_design", "生成创意方向"),
+        Map.entry("visual_design", "生成视觉方案"),
+        Map.entry("technical_design", "生成落地方案"),
+        Map.entry("doc_generate", "生成最终文档")
+    );
 
     public WorkflowEngine(WorkflowLogRepository logRepository,
                           com.meichen.orchestrator.service.ThinkingLogService thinkingLogService,
                           com.meichen.orchestrator.service.SseEmitterService sseEmitterService,
+                          com.meichen.orchestrator.service.StageLogService stageLogService,
                           @Value("${agent-core.base-url:http://localhost:8000}") String agentCoreBaseUrl) {
         this.restTemplate = new RestTemplate();
         this.agentCoreBaseUrl = agentCoreBaseUrl.endsWith("/") ? agentCoreBaseUrl.substring(0, agentCoreBaseUrl.length() - 1) : agentCoreBaseUrl;
         this.logRepository = logRepository;
         this.thinkingLogService = thinkingLogService;
         this.sseEmitterService = sseEmitterService;
+        this.stageLogService = stageLogService;
     }
 
-    public Map<String, Object> execute(String projectId, Map<String, Object> initialPayload) {
+    public Map<String, Object> execute(String projectId, Map<String, Object> initialPayload, Long userId) {
         String startFromNode = (String) initialPayload.get("start_from");
         
         List<WorkflowNode> nodes = WorkflowDefinition.getNodes();
@@ -61,7 +81,7 @@ public class WorkflowEngine {
         outputs.put("initial_payload", initialPayload);
 
         String stopAtNode = (String) initialPayload.get("stop_at");
-        log.info("startFromNode: {}, stopAtNode: {}", startFromNode, stopAtNode);
+        log.debug("startFromNode: {}, stopAtNode: {}", startFromNode, stopAtNode);
         
         Set<String> completedNodes = new HashSet<>();
         
@@ -101,13 +121,13 @@ public class WorkflowEngine {
             String nodeName = queue.poll();
 
             if (stopAtNode != null && !stopAtNode.isEmpty() && isDependencyOf(stopAtNode, nodeName, nodes)) {
-                log.info("Skipping node {} as it's beyond stop_at node {}", nodeName, stopAtNode);
+                log.debug("Skipping node {} as it's beyond stop_at node {}", nodeName, stopAtNode);
                 continue;
             }
 
             WorkflowNode node = nodeMap.get(nodeName);
             try {
-                Object result = runNode(projectId, node, outputs);
+                Object result = runNode(projectId, node, outputs, userId);
                 outputs.put(nodeName, result);
             } catch (Exception e) {
                 outputs.put(nodeName, Map.of("error", e.getMessage()));
@@ -115,7 +135,7 @@ public class WorkflowEngine {
             }
 
             if (stopAtNode != null && stopAtNode.equals(nodeName)) {
-                log.info("Stopping workflow at node: {}", stopAtNode);
+                log.debug("Stopping workflow at node: {}", stopAtNode);
                 break;
             }
 
@@ -130,11 +150,14 @@ public class WorkflowEngine {
         return outputs;
     }
 
-    private Object runNode(String projectId, WorkflowNode node, Map<String, Object> outputs) {
-        log.info("runNode called for node: {}, project: {}", node.name(), projectId);
+    private Object runNode(String projectId, WorkflowNode node, Map<String, Object> outputs, Long userId) {
+        log.debug("runNode called for node: {}, project: {}", node.name(), projectId);
+        String stageLabel = NODE_LABELS.getOrDefault(node.name(), node.name());
+        StageLog stageLog = stageLogService.startStage(projectId, node.name(), stageLabel, userId);
+
         boolean logThinking = thinkingLogService.shouldLog(node.name());
         if (logThinking) {
-            thinkingLogService.logStarted(projectId, node.name());
+            thinkingLogService.logStarted(projectId, node.name(), userId);
             sseEmitterService.sendToProject(projectId, "thinking", Map.of(
                 "node_name", node.name(),
                 "status", "started",
@@ -187,7 +210,7 @@ public class WorkflowEngine {
             }
         }
 
-        log.info("Sending request to endpoint: {} with payload size: {}", node.endpoint(), payload.size());
+        log.debug("Sending request to endpoint: {} with payload size: {}", node.endpoint(), payload.size());
 
         int retries = 0;
         Exception lastError = null;
@@ -195,7 +218,7 @@ public class WorkflowEngine {
         while (retries < MAX_RETRIES) {
             try {
                 String url = agentCoreBaseUrl + node.endpoint();
-                log.info("Calling endpoint {} for node {}", url, node.name());
+                log.debug("Calling endpoint {} for node {}", url, node.name());
 
                 HttpHeaders headers = new HttpHeaders();
                 headers.setContentType(MediaType.APPLICATION_JSON);
@@ -203,7 +226,7 @@ public class WorkflowEngine {
 
                 ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
                 String body = response.getBody();
-                log.info("Received response for node {} (status={}, length={})", node.name(), response.getStatusCode(), body != null ? body.length() : 0);
+                log.debug("Received response for node {} (status={}, length={})", node.name(), response.getStatusCode(), body != null ? body.length() : 0);
 
                 // Log success
                 WorkflowLog successLog = new WorkflowLog();
@@ -214,7 +237,7 @@ public class WorkflowEngine {
                 successLog.setRetryCount(retries);
                 logRepository.save(successLog);
                 if (logThinking) {
-                    thinkingLogService.logCompleted(projectId, node.name());
+                    thinkingLogService.logCompleted(projectId, node.name(), userId);
                     sseEmitterService.sendToProject(projectId, "thinking", Map.of(
                         "node_name", node.name(),
                         "status", "completed",
@@ -222,7 +245,10 @@ public class WorkflowEngine {
                     ));
                 }
 
-                return parseJson(body);
+                Object result = parseJson(body);
+                Map<String, Object> metadata = buildStageMetadata(node.name(), result);
+                stageLogService.completeStage(stageLog.getId(), metadata);
+                return result;
             } catch (Exception e) {
                 lastError = e;
                 retries++;
@@ -243,7 +269,7 @@ public class WorkflowEngine {
         failLog.setRetryCount(retries);
         logRepository.save(failLog);
         if (logThinking) {
-            thinkingLogService.logFailed(projectId, node.name(), errorMsg);
+            thinkingLogService.logFailed(projectId, node.name(), errorMsg, userId);
             sseEmitterService.sendToProject(projectId, "thinking", Map.of(
                 "node_name", node.name(),
                 "status", "failed",
@@ -251,6 +277,7 @@ public class WorkflowEngine {
             ));
         }
 
+        stageLogService.failStage(stageLog.getId(), errorMsg);
         throw new RuntimeException("Node " + node.name() + " failed after " + MAX_RETRIES + " retries", lastError);
     }
 
@@ -311,5 +338,61 @@ public class WorkflowEngine {
             log.warn("Failed to parse JSON: {}", e.getMessage());
             return new HashMap<>();
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> buildStageMetadata(String nodeName, Object result) {
+        Map<String, Object> metadata = new HashMap<>();
+        if (!(result instanceof Map)) {
+            return metadata;
+        }
+        Map<String, Object> resultMap = (Map<String, Object>) result;
+
+        if ("visual_design".equals(nodeName)) {
+            List<Map<String, Object>> ideas = (List<Map<String, Object>>) resultMap.get("ideas");
+            if (ideas != null) {
+                int totalImages = 0;
+                int successImages = 0;
+                int failedImages = 0;
+                for (Map<String, Object> idea : ideas) {
+                    List<Map<String, Object>> points = (List<Map<String, Object>>) idea.get("points");
+                    if (points != null) {
+                        for (Map<String, Object> point : points) {
+                            List<String> urls = (List<String>) point.get("image_urls");
+                            if (urls != null) {
+                                totalImages += urls.size();
+                                for (String url : urls) {
+                                    if (url != null && !url.isBlank()) {
+                                        successImages++;
+                                    } else {
+                                        failedImages++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    List<String> ideaUrls = (List<String>) idea.get("image_urls");
+                    if (ideaUrls != null) {
+                        totalImages += ideaUrls.size();
+                        for (String url : ideaUrls) {
+                            if (url != null && !url.isBlank()) {
+                                successImages++;
+                            } else {
+                                failedImages++;
+                            }
+                        }
+                    }
+                }
+                metadata.put("total_images", totalImages);
+                metadata.put("success_images", successImages);
+                metadata.put("failed_images", failedImages);
+            }
+        } else if ("concept_design".equals(nodeName)) {
+            List<Map<String, Object>> ideas = (List<Map<String, Object>>) resultMap.get("ideas");
+            if (ideas != null) {
+                metadata.put("idea_count", ideas.size());
+            }
+        }
+        return metadata;
     }
 }

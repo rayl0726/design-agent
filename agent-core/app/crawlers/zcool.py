@@ -139,7 +139,7 @@ class ZcoolCrawler(BaseCrawler):
                 pass
 
         # 1) 追加到本地 JSONL
-        jsonl_path = Path("/Users/liulei/private-work/design-data/extracted/cases.jsonl")
+        jsonl_path = Path("/Users/liulei/private-work/design-agent/design-data/extracted/cases.jsonl")
         jsonl_path.parent.mkdir(parents=True, exist_ok=True)
         record = dict(extracted)
         record["source_url"] = source_url

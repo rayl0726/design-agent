@@ -166,9 +166,12 @@ class TechnicalDesignerAgent:
         draw.ellipse([200, legend_y + 5, 220, legend_y + 25], fill="#AAAAAA", outline="#666666")
         draw.text((230, legend_y), "柱网", fill="#333333", font=font)
 
-        path = f"{settings.image_cache_dir}/layout_{requirement.get('theme', 'default')}.png"
+        from pathlib import Path
+        cache_dir = Path(settings.image_cache_dir)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        path = cache_dir / f"layout_{requirement.get('theme', 'default')}.png"
         img.save(path)
-        return path
+        return path.name
 
     async def _generate_material_list(
         self, l2: dict[str, Any], requirement: dict[str, Any]

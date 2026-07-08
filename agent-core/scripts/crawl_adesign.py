@@ -1,7 +1,7 @@
- """A'Design Award 爬虫：采集商业空间/零售美陈/装置艺术案例。
+"""A'Design Award 爬虫：采集商业空间/零售美陈/装置艺术案例。
 
 使用方式：
-    python agent-core/scripts/crawl_adesign.py --output /Users/liulei/private-work/design-data/temp --limit 50
+    python agent-core/scripts/crawl_adesign.py --output /Users/liulei/private-work/design-agent/design-data/temp --limit 50
 """
 
 from __future__ import annotations
@@ -428,7 +428,7 @@ class ADesignCrawler:
 
 def main():
     parser = argparse.ArgumentParser(description="Crawl A'Design Award cases")
-    parser.add_argument("--output", default="/Users/liulei/private-work/design-data/temp", help="输出目录")
+    parser.add_argument("--output", default="/Users/liulei/private-work/design-agent/design-data/temp", help="输出目录")
     parser.add_argument("--limit", type=int, default=50, help="采集数量")
     parser.add_argument("--delay", type=float, default=2.0, help="请求间隔秒数")
     args = parser.parse_args()

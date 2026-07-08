@@ -16,7 +16,7 @@ logging.basicConfig(
 @click.group()
 @click.option(
     "--output-dir",
-    default="/Users/liulei/private-work/design-data",
+    default="/Users/liulei/private-work/design-agent/design-data",
     help="本地数据归档根目录",
 )
 @click.option("--delay-min", default=2.0, help="最小延迟（秒）")

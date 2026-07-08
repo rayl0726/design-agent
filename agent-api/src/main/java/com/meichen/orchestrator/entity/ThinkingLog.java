@@ -33,6 +33,9 @@ public class ThinkingLog {
     @Column(name = "public_id", unique = true, nullable = false, length = 32)
     private String publicId;
 
+    @Column(name = "user_id")
+    private Long userId;
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
 
@@ -50,6 +53,9 @@ public class ThinkingLog {
 
     public String getPublicId() { return publicId; }
     public void setPublicId(String publicId) { this.publicId = publicId; }
+
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

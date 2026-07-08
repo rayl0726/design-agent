@@ -59,6 +59,18 @@
           <el-button v-if="sessionId" text @click="deleteSession">
             <el-icon><Delete /></el-icon>
           </el-button>
+          <el-dropdown trigger="click" @command="handleUserCommand">
+            <span class="user-info">
+              <el-icon><User /></el-icon>
+              <span class="user-phone">{{ authStore.phone || '未知用户' }}</span>
+              <el-icon class="dropdown-icon"><ArrowDown /></el-icon>
+            </span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
       </header>
 
@@ -159,16 +171,43 @@
 
   <el-drawer
     v-model="logDrawerOpen"
-    title="系统日志"
+    title="流程阶段日志"
     direction="rtl"
     size="720px"
   >
     <div class="log-toolbar">
-      <el-button size="small" @click="loadAgentLogs" :loading="logLoading">刷新</el-button>
+      <el-button size="small" @click="loadStageLogs" :loading="logLoading">刷新</el-button>
     </div>
     <div v-loading="logLoading" class="log-content">
-      <pre v-if="logLines.length">{{ logLines.join('\n') }}</pre>
-      <el-empty v-else description="暂无日志" :image-size="60" />
+      <div v-if="stageLogs.length" class="stage-log-list">
+        <div
+          v-for="log in stageLogs"
+          :key="log.id"
+          class="stage-log-item"
+          :class="'status-' + log.status.toLowerCase()"
+        >
+          <div class="stage-log-header">
+            <span class="stage-status-dot"></span>
+            <span class="stage-name">{{ log.stageLabel || log.stageName }}</span>
+            <span class="stage-status">{{ formatStageStatus(log.status) }}</span>
+          </div>
+          <div class="stage-log-meta">
+            <span v-if="log.startedAt">开始：{{ formatTime(log.startedAt) }}</span>
+            <span v-if="log.completedAt">结束：{{ formatTime(log.completedAt) }}</span>
+            <span v-if="log.durationMs != null">耗时：{{ formatDuration(log.durationMs) }}</span>
+          </div>
+          <div v-if="log.errorMessage" class="stage-log-error">
+            失败原因：{{ log.errorMessage }}
+          </div>
+          <div v-if="hasImageStats(log.metadata)" class="stage-log-stats">
+            图片生成：{{ log.metadata.success_images }}/{{ log.metadata.total_images }} 成功
+            <span v-if="log.metadata.failed_images > 0" class="stage-log-fail-count">
+              （{{ log.metadata.failed_images }} 张失败）
+            </span>
+          </div>
+        </div>
+      </div>
+      <el-empty v-else description="暂无阶段日志" :image-size="60" />
     </div>
   </el-drawer>
 </template>
@@ -177,14 +216,17 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, ChatDotRound, Delete, MagicStick, Paperclip, Promotion, Document } from '@element-plus/icons-vue'
-import { projectApi, messageApi, thinkingApi, logApi } from '../api/client.js'
+import { Plus, ChatDotRound, Delete, MagicStick, Paperclip, Promotion, Document, User, ArrowDown } from '@element-plus/icons-vue'
+import { fetchEventSource } from '@microsoft/fetch-event-source'
+import { projectApi, messageApi, thinkingApi, stageLogApi } from '../api/client.js'
+import { useAuthStore } from '@/stores/auth'
 import TextMessage from '../components/chat/TextMessage.vue'
 import IdeaGallery from '../components/chat/IdeaGallery.vue'
 import ThinkingProcess from '../components/chat/ThinkingProcess.vue'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 const sessionId = ref(route.params.id || null)
 const session = ref({})
 const sessions = ref([])
@@ -195,7 +237,7 @@ const creating = ref(false)
 const messageList = ref(null)
 const thinkingLogs = ref([])
 const logDrawerOpen = ref(false)
-const logLines = ref([])
+const stageLogs = ref([])
 const logLoading = ref(false)
 let eventSource = null
 let sseReconnectTimer = null
@@ -219,7 +261,30 @@ const formatDate = (str) => {
 
 const formatTime = (str) => {
   if (!str) return ''
-  return new Date(str).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return new Date(str).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
+const formatStageStatus = (status) => {
+  const map = {
+    PENDING: '等待中',
+    RUNNING: '执行中',
+    SUCCESS: '成功',
+    FAILED: '失败',
+  }
+  return map[status] || status
+}
+
+const formatDuration = (ms) => {
+  if (ms == null) return ''
+  if (ms < 1000) return `${ms}ms`
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
+  const minutes = Math.floor(ms / 60000)
+  const seconds = ((ms % 60000) / 1000).toFixed(0)
+  return `${minutes}m ${seconds}s`
+}
+
+const hasImageStats = (metadata) => {
+  return metadata && metadata.total_images != null
 }
 
 const scrollToBottom = () => {
@@ -272,16 +337,20 @@ const loadThinkingLogs = async () => {
 
 const openLogDrawer = async () => {
   logDrawerOpen.value = true
-  await loadAgentLogs()
+  await loadStageLogs()
 }
 
-const loadAgentLogs = async () => {
+const loadStageLogs = async () => {
+  if (!sessionId.value) {
+    stageLogs.value = []
+    return
+  }
   logLoading.value = true
   try {
-    const res = await logApi.agentApi(300)
-    logLines.value = res.data.lines || []
+    const res = await stageLogApi.list(sessionId.value)
+    stageLogs.value = res.data || []
   } catch (e) {
-    ElMessage.error('加载系统日志失败')
+    ElMessage.error('加载阶段日志失败')
   } finally {
     logLoading.value = false
   }
@@ -324,101 +393,94 @@ const connectSse = (projectId) => {
   disconnectSse()
   if (!projectId) return
 
-  const url = `http://localhost:8080/api/v1/projects/${projectId}/events`
-  try {
-    eventSource = new EventSource(url)
+  const url = `/api/v1/projects/${projectId}/events`
+  const ctrl = new AbortController()
+  eventSource = ctrl
 
-    eventSource.addEventListener('status', (e) => {
-      try {
-        const data = JSON.parse(e.data)
-        session.value.status = data.status
-        if (data.current_level) session.value.currentLevel = data.current_level
-      } catch (err) {
-        console.error('Invalid status event', err)
-      }
-    })
-
-    eventSource.addEventListener('message', (e) => {
-      try {
-        const data = JSON.parse(e.data)
-        const exists = messages.value.find((m) => m.id === data.id)
-        if (!exists) {
-          // 如果是真实用户消息，替换掉相同内容的临时消息
-          if (data.role === 'user') {
-            const tempIndex = messages.value.findIndex(
-              (m) => m.role === 'user' && m.id.startsWith('temp-') && m.content === data.content
-            )
-            if (tempIndex >= 0) {
-              messages.value[tempIndex] = {
-                id: data.id,
-                projectId: projectId,
-                role: data.role,
-                messageType: data.message_type,
-                content: data.content,
-                createdAt: data.created_at,
-              }
-              scrollToBottom()
-              return
-            }
-          }
-          messages.value.push({
-            id: data.id,
-            projectId: projectId,
-            role: data.role,
-            messageType: data.message_type,
-            content: data.content,
-            createdAt: data.created_at,
-          })
-          scrollToBottom()
-        }
-      } catch (err) {
-        console.error('Invalid message event', err)
-      }
-    })
-
-    eventSource.addEventListener('thinking', (e) => {
-      try {
-        const data = JSON.parse(e.data)
-        const existing = thinkingLogs.value.find((l) => l.nodeName === data.node_name)
-        if (existing) {
-          existing.status = data.status
-          existing.message = data.message
-          existing.createdAt = new Date().toISOString()
-        } else {
-          thinkingLogs.value.push({
-            nodeName: data.node_name,
-            status: data.status,
-            message: data.message,
-            createdAt: new Date().toISOString(),
-          })
-        }
-        scrollToBottom()
-      } catch (err) {
-        console.error('Invalid thinking event', err)
-      }
-    })
-
-    eventSource.addEventListener('error', (e) => {
-      try {
-        const data = JSON.parse(e.data)
-        ElMessage.error(data.message || '处理出错')
-      } catch (err) {
-        console.error('SSE error', err)
-      }
-      // 非用户主动关闭时自动重连
-      scheduleReconnect(projectId)
-    })
-
-    eventSource.onopen = () => {
+  fetchEventSource(url, {
+    headers: {
+      Authorization: `Bearer ${authStore.token}`,
+    },
+    signal: ctrl.signal,
+    openWhenHidden: true,
+    onopen() {
       if (sseReconnectTimer) {
         clearTimeout(sseReconnectTimer)
         sseReconnectTimer = null
       }
+    },
+    onmessage(msg) {
+      try {
+        const data = JSON.parse(msg.data)
+        if (msg.event === 'status') {
+          session.value.status = data.status
+          if (data.current_level) session.value.currentLevel = data.current_level
+        } else if (msg.event === 'message') {
+          const exists = messages.value.find((m) => m.id === data.id)
+          if (!exists) {
+            if (data.role === 'user') {
+              const tempIndex = messages.value.findIndex(
+                (m) => m.role === 'user' && m.id.startsWith('temp-') && m.content === data.content
+              )
+              if (tempIndex >= 0) {
+                messages.value[tempIndex] = {
+                  id: data.id,
+                  projectId: projectId,
+                  role: data.role,
+                  messageType: data.message_type,
+                  content: data.content,
+                  createdAt: data.created_at,
+                }
+                scrollToBottom()
+                return
+              }
+            }
+            messages.value.push({
+              id: data.id,
+              projectId: projectId,
+              role: data.role,
+              messageType: data.message_type,
+              content: data.content,
+              createdAt: data.created_at,
+            })
+            scrollToBottom()
+          }
+        } else if (msg.event === 'thinking') {
+          const existing = thinkingLogs.value.find((l) => l.nodeName === data.node_name)
+          if (existing) {
+            existing.status = data.status
+            existing.message = data.message
+            existing.createdAt = new Date().toISOString()
+          } else {
+            thinkingLogs.value.push({
+              nodeName: data.node_name,
+              status: data.status,
+              message: data.message,
+              createdAt: new Date().toISOString(),
+            })
+          }
+          scrollToBottom()
+        } else if (msg.event === 'error') {
+          ElMessage.error(data.message || '处理出错')
+        }
+      } catch (err) {
+        console.error('Invalid SSE event', msg.event, err)
+      }
+    },
+    onclose() {
+      // 连接被服务端正常关闭时不自动重连；异常断开会通过 onerror 处理
+    },
+    onerror(err) {
+      console.error('SSE error', err)
+      scheduleReconnect(projectId)
+      // 必须抛出错误才能阻止 fetchEventSource 内部重连，由我们自己控制重连
+      throw err
+    },
+  }).catch((err) => {
+    if (err.name !== 'AbortError') {
+      console.error('SSE connection failed', err)
     }
-  } catch (e) {
-    console.error('Failed to connect SSE', e)
-    scheduleReconnect(projectId)
-  }
+  })
 }
 
 const scheduleReconnect = (projectId) => {
@@ -435,7 +497,7 @@ const disconnectSse = () => {
     sseReconnectTimer = null
   }
   if (eventSource) {
-    eventSource.close()
+    eventSource.abort()
     eventSource = null
   }
 }
@@ -492,6 +554,13 @@ const parseJson = (str) => {
 
 const goSession = (id) => {
   router.push(`/project/${id}`)
+}
+
+const handleUserCommand = (command) => {
+  if (command === 'logout') {
+    authStore.logout()
+    router.push('/login')
+  }
 }
 
 onMounted(() => {
@@ -992,6 +1061,34 @@ watch(() => route.params.id, (newId) => {
   margin-left: 4px;
 }
 
+.user-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 6px;
+  color: #475569;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.user-info:hover {
+  background: #f1f5f9;
+}
+
+.user-phone {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropdown-icon {
+  font-size: 12px;
+}
+
 .log-toolbar {
   margin-bottom: 12px;
   display: flex;
@@ -1001,7 +1098,7 @@ watch(() => route.params.id, (newId) => {
 .log-content {
   height: calc(100vh - 140px);
   overflow: auto;
-  background: #0f172a;
+  background: #f8fafc;
   border-radius: 8px;
   padding: 12px;
 }
@@ -1014,5 +1111,116 @@ watch(() => route.params.id, (newId) => {
   white-space: pre-wrap;
   word-break: break-all;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.stage-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stage-log-item {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px 16px;
+  border-left: 4px solid #94a3b8;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.stage-log-item.status-success {
+  border-left-color: #22c55e;
+}
+
+.stage-log-item.status-failed {
+  border-left-color: #ef4444;
+}
+
+.stage-log-item.status-running {
+  border-left-color: #3b82f6;
+}
+
+.stage-log-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.stage-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.status-success .stage-status-dot {
+  background: #22c55e;
+}
+
+.status-failed .stage-status-dot {
+  background: #ef4444;
+}
+
+.status-running .stage-status-dot {
+  background: #3b82f6;
+}
+
+.stage-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.stage-status {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.status-success .stage-status {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-failed .stage-status {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-running .stage-status {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.stage-log-meta {
+  font-size: 12px;
+  color: #64748b;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.stage-log-error {
+  font-size: 12px;
+  color: #991b1b;
+  background: #fee2e2;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
+.stage-log-stats {
+  font-size: 12px;
+  color: #475569;
+  margin-top: 6px;
+}
+
+.stage-log-fail-count {
+  color: #dc2626;
+  font-weight: 500;
 }
 </style>

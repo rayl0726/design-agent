@@ -1,5 +1,6 @@
 import asyncio
 import json
+from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
@@ -42,14 +43,19 @@ class VisualDesignerAgent:
             
             if points:
                 for point in points:
-                    prompts = [point.get("left_prompt", ""), point.get("center_prompt", ""), point.get("right_prompt", "")][:settings.images_per_point]
-                    point["image_urls"] = [""] * settings.images_per_point
+                    # 按优先级取可用的视角提示词，单张时优先用中心视角
+                    all_prompts = [
+                        point.get("center_prompt", ""),
+                        point.get("left_prompt", ""),
+                        point.get("right_prompt", ""),
+                    ]
+                    prompts = [p for p in all_prompts if p][:settings.images_per_point]
+                    point["image_urls"] = [""] * min(len(prompts), settings.images_per_point)
                     for prompt_idx, prompt in enumerate(prompts):
-                        if prompt:
-                            task = image_generation.generate(prompt, aspect_ratio="16:9", style="realistic")
-                            all_tasks.append(task)
-                            task_to_point[task] = (point, prompt_idx)
-                            task_to_idea[task] = idea.get("title")
+                        task = image_generation.generate(prompt, aspect_ratio="16:9", style="realistic")
+                        all_tasks.append(task)
+                        task_to_point[task] = (point, prompt_idx)
+                        task_to_idea[task] = idea.get("title")
                 
                 first_point = points[0]
                 if first_point.get("image_urls"):
@@ -206,9 +212,11 @@ class VisualDesignerAgent:
         for i, area in enumerate(areas):
             draw.text((50, y_offset + 50 + i * 40), f"• {area}", fill="#555555", font=font_label)
 
-        output_path = f"{settings.image_cache_dir}/color_material_board_{requirement.get('theme', 'default')}.png"
+        cache_dir = Path(settings.image_cache_dir)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        output_path = cache_dir / f"color_material_board_{requirement.get('theme', 'default')}.png"
         img.save(output_path)
-        return output_path
+        return output_path.name
 
     async def consistency_check(self, l1: dict[str, Any], l2: dict[str, Any]) -> dict[str, Any]:
         prompt = (

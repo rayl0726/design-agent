@@ -46,7 +46,7 @@ async def enrich_preview(input_path: str, output_path: str, count: int = 3) -> N
 
 
 if __name__ == "__main__":
-    input_path = "/Users/liulei/private-work/design-data/temp/adesign_samples_v1.jsonl"
-    output_path = "/Users/liulei/private-work/design-data/temp/adesign_samples_preview_enriched.jsonl"
+    input_path = "/Users/liulei/private-work/design-agent/design-data/temp/adesign_samples_v1.jsonl"
+    output_path = "/Users/liulei/private-work/design-agent/design-data/temp/adesign_samples_preview_enriched.jsonl"
     count = 3
     asyncio.run(enrich_preview(input_path, output_path, count))

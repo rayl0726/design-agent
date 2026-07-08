@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     ppt_template_path: str = str(_DESIGN_DATA / "templates" / "template.pptx")
 
     idea_count: int = 3
-    images_per_point: int = 3
+    images_per_point: int = 1
     max_parallel_images: int = 8
 
 

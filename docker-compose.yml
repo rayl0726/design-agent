@@ -11,7 +11,7 @@ services:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
     volumes:
-      - /Users/liulei/private-work/design-data/milvus:/var/lib/milvus
+      - /Users/liulei/private-work/design-agent/design-data/milvus:/var/lib/milvus
     ports:
       - "19530:19530"
       - "9091:9091"
@@ -28,7 +28,7 @@ services:
       - ETCD_QUOTA_BACKEND_BYTES=4294967296
       - ETCD_SNAPSHOT_COUNT=50000
     volumes:
-      - /Users/liulei/private-work/design-data/etcd:/etcd
+      - /Users/liulei/private-work/design-agent/design-data/etcd:/etcd
     command: etcd -advertise-client-urls http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
     ports:
       - "2379:2379"
@@ -43,7 +43,7 @@ services:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - /Users/liulei/private-work/design-data/minio:/minio_data
+      - /Users/liulei/private-work/design-agent/design-data/minio:/minio_data
     command: minio server /minio_data --console-address ":9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]

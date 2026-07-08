@@ -41,7 +41,7 @@ public class ThinkingLogService {
     }
 
     @Transactional
-    public void logStarted(String projectId, String nodeName) {
+    public void logStarted(String projectId, String nodeName, Long userId) {
         Optional<ThinkingLog> existing = thinkingLogRepository
             .findTopByProjectIdAndNodeNameOrderByCreatedAtDesc(projectId, nodeName);
 
@@ -56,12 +56,13 @@ public class ThinkingLogService {
             tl.setNodeName(nodeName);
             tl.setStatus("started");
             tl.setMessage(NODE_MESSAGES.getOrDefault(nodeName, "执行 " + nodeName));
+            tl.setUserId(userId);
             publicIdGenerator.assignAndSave(tl, ThinkingLog::setPublicId, thinkingLogRepository::save);
         }
     }
 
     @Transactional
-    public void logCompleted(String projectId, String nodeName) {
+    public void logCompleted(String projectId, String nodeName, Long userId) {
         Optional<ThinkingLog> existing = thinkingLogRepository
             .findTopByProjectIdAndNodeNameOrderByCreatedAtDesc(projectId, nodeName);
 
@@ -76,12 +77,13 @@ public class ThinkingLogService {
             tl.setNodeName(nodeName);
             tl.setStatus("completed");
             tl.setMessage(NODE_MESSAGES.getOrDefault(nodeName, "执行 " + nodeName));
+            tl.setUserId(userId);
             publicIdGenerator.assignAndSave(tl, ThinkingLog::setPublicId, thinkingLogRepository::save);
         }
     }
 
     @Transactional
-    public void logFailed(String projectId, String nodeName, String error) {
+    public void logFailed(String projectId, String nodeName, String error, Long userId) {
         Optional<ThinkingLog> existing = thinkingLogRepository
             .findTopByProjectIdAndNodeNameOrderByCreatedAtDesc(projectId, nodeName);
 
@@ -96,6 +98,7 @@ public class ThinkingLogService {
             tl.setNodeName(nodeName);
             tl.setStatus("failed");
             tl.setMessage(NODE_MESSAGES.getOrDefault(nodeName, "执行 " + nodeName) + " 失败: " + error);
+            tl.setUserId(userId);
             publicIdGenerator.assignAndSave(tl, ThinkingLog::setPublicId, thinkingLogRepository::save);
         }
     }

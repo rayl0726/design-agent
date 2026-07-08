@@ -38,7 +38,7 @@ class PollinationsProvider(ImageGenerationProvider):
                 path = cache_dir / f"pollinations_{content_hash}.png"
                 with open(path, "wb") as f:
                     f.write(resp.content)
-                return str(path)
+                return path.name
             except Exception as e:
                 last_error = e
                 print(f"[PollinationsProvider] attempt {attempt + 1} failed: {e}")
@@ -82,7 +82,7 @@ class PlaceholderProvider(ImageGenerationProvider):
         text = f"[占位图]\n{prompt[:60]}..."
         draw.text((width // 2 - 200, height // 2 - 30), text, fill="#888888", font=font)
         img.save(path)
-        return str(path)
+        return path.name
 
 
 class ZhipuProvider(ImageGenerationProvider):
@@ -129,7 +129,7 @@ class ZhipuProvider(ImageGenerationProvider):
         with open(path, "wb") as f:
             f.write(img_resp.content)
         print(f"[ZhipuProvider] saved to {path}")
-        return str(path)
+        return path.name
 
 
 class SiliconFlowProvider(ImageGenerationProvider):
@@ -179,7 +179,7 @@ class SiliconFlowProvider(ImageGenerationProvider):
         with open(path, "wb") as f:
             f.write(img_resp.content)
         print(f"[SiliconFlowProvider] saved to {path}")
-        return str(path)
+        return path.name
 
 
 class ImageGenerationService:

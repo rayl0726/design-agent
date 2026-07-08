@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS stage_logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    public_id VARCHAR(32) NOT NULL UNIQUE,
+    project_id VARCHAR(36) NOT NULL,
+    parent_id BIGINT NULL,
+    stage_name VARCHAR(100) NOT NULL,
+    stage_label VARCHAR(200) NULL,
+    status VARCHAR(20) NOT NULL,
+    started_at DATETIME NULL,
+    completed_at DATETIME NULL,
+    duration_ms BIGINT NULL,
+    error_message VARCHAR(4000) NULL,
+    metadata_json TEXT NULL,
+    user_id BIGINT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_stage_logs_project_id (project_id),
+    INDEX idx_stage_logs_user_id (user_id),
+    INDEX idx_stage_logs_parent_id (parent_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

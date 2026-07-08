@@ -2,6 +2,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
+
 from fastapi.staticfiles import StaticFiles
 
 from app.api.routers import router as api_router
@@ -32,8 +34,8 @@ app.add_middleware(
 
 app.include_router(api_router)
 
-# 静态文件服务（预览生成的 HTML 和图片）
-app.mount("/data", StaticFiles(directory="data"), name="data")
+# 静态文件服务（预览生成的 HTML 和图片），指向外部 design-data 目录
+app.mount("/data", StaticFiles(directory=str(Path(settings.image_cache_dir).parent)), name="data")
 
 
 @app.get("/health")
