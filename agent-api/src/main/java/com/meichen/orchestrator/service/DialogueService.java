@@ -75,12 +75,17 @@ public class DialogueService {
             log.info("text_parse result: {}", textParse);
             pushThinking(projectId, "text_parse", "completed");
 
-            // 1.5 意图不完整时直接发起澄清
+            // 1.5 意图不完整时发起澄清，但仍合并已解析的字段
             Object needsClarificationObj = textParse.get("needs_clarification");
             Boolean needsClarification = needsClarificationObj instanceof Boolean
                 ? (Boolean) needsClarificationObj
                 : Boolean.valueOf(String.valueOf(needsClarificationObj));
             if (Boolean.TRUE.equals(needsClarification)) {
+                Map<String, Object> existingRequirement = parseJson(project.getRequirementJson());
+                Map<String, Object> merged = mergeRequirements(existingRequirement, textParse);
+                project.setRequirementJson(toJson(merged));
+                projectRepository.save(project);
+
                 String clarificationQuestion = textParse.get("clarification_question") != null
                     ? String.valueOf(textParse.get("clarification_question"))
                     : "能否补充一下上述信息？";
@@ -215,6 +220,10 @@ public class DialogueService {
         merged.remove("design_direction");
         merged.remove("spatial_notes");
         merged.remove("risk_hints");
+        merged.remove("needs_clarification");
+        merged.remove("clarification_question");
+        merged.remove("low_confidence_fields");
+        merged.remove("_recognition_meta");
 
         return merged;
     }
