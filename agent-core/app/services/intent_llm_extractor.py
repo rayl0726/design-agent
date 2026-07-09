@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Protocol
 
 from pydantic import ValidationError
 
 from app.services.intent_schemas import IntentOutput
+from app.services.learning.few_shot_library import Example, FewShotLibrary
 from app.services.llm_client import llm_client as _default_llm_client
 from app.services.taxonomy_loader import Taxonomy, load_taxonomy
 
@@ -41,10 +43,12 @@ class IntentLLMExtractor:
         taxonomy: Taxonomy | None = None,
         llm_client: LLMClient | None = None,
         max_retries: int = 2,
+        few_shot_library: FewShotLibrary | None = None,
     ):
         self.taxonomy = taxonomy or load_taxonomy()
         self._llm_client = llm_client or _default_llm_client
         self._max_retries = max_retries
+        self._few_shot_library = few_shot_library
 
     def _taxonomy_prompt_fragment(self) -> str:
         space_types = [s["name"] for s in self.taxonomy.space_types]
@@ -59,14 +63,52 @@ class IntentLLMExtractor:
             f"- 材质候选：{', '.join(materials)}\n"
         )
 
-    def _build_prompt(self, text: str) -> str:
+    async def _build_prompt(self, text: str) -> str:
         schema_json = IntentOutput.model_json_schema()
         return (
             f"用户输入：\"{text}\"\n\n"
             "请提取设计需求并输出符合以下 JSON Schema 的对象：\n"
             f"{json.dumps(schema_json, ensure_ascii=False, indent=2)}\n"
             f"{self._taxonomy_prompt_fragment()}"
+            f"{await self._few_shot_prompt_fragment(text)}"
         )
+
+    async def _few_shot_prompt_fragment(self, text: str) -> str:
+        if self._few_shot_library is None:
+            return ""
+        examples = await self._few_shot_library.retrieve(
+            space_type=self._extract_space_type_hint(text),
+            theme=self._extract_theme_hint(text),
+            top_k=3,
+        )
+        if not examples:
+            return ""
+        rendered = "\n参考示例（输入 -> 输出）：\n" + "\n".join(
+            f"- 输入：{e.input_text}\n  输出：{self._example_output(e)}" for e in examples
+        )
+        return rendered + "\n"
+
+    def _extract_space_type_hint(self, text: str) -> str | None:
+        for name in self.taxonomy.space_type_names:
+            if name in text:
+                return name
+        return None
+
+    def _extract_theme_hint(self, text: str) -> str | None:
+        match = re.search(r"([^，。]+?)(?:主题|theme)", text)
+        if match:
+            return match.group(1).strip()
+        return None
+
+    def _example_output(self, example: Example) -> str:
+        parts = [f"space_type: {example.space_type}"]
+        if example.theme:
+            parts.append(f"theme: {example.theme}")
+        if example.budget:
+            parts.append(f"budget: {example.budget}")
+        if example.points:
+            parts.append(f"points: {', '.join(example.points)}")
+        return "; ".join(parts)
 
     def _parse_llm_output(self, raw: str) -> IntentOutput | None:
         cleaned = raw.strip()
@@ -104,7 +146,7 @@ class IntentLLMExtractor:
         )
 
     async def extract(self, text: str) -> IntentOutput | None:
-        prompt = self._build_prompt(text)
+        prompt = await self._build_prompt(text)
         for attempt in range(self._max_retries + 1):
             try:
                 raw = await self._llm_client.complete(
