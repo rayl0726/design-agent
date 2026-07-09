@@ -326,6 +326,64 @@ class IntentRecognitionService:
 
         return result
 
+    def fill_missing_from_context(
+        self,
+        result: IntentRecognitionResult,
+        last_intent: IntentRecognitionResult | None,
+    ) -> IntentRecognitionResult:
+        if last_intent is None:
+            return result
+
+        inherit_fields = [
+            "style",
+            "color_preference",
+            "brand_positioning",
+            "design_system_preference",
+        ]
+        for field_name in inherit_fields:
+            current = getattr(result, field_name)
+            previous = getattr(last_intent, field_name)
+            if current is None and previous is not None:
+                setattr(result, field_name, previous)
+
+        for field_name in ("material_restrictions", "special_requirements"):
+            current = getattr(result, field_name)
+            previous = getattr(last_intent, field_name)
+            if not current and previous:
+                setattr(result, field_name, previous)
+
+        return result
+
+    def apply_defaults(self, result: IntentRecognitionResult) -> IntentRecognitionResult:
+        defaults = self.taxonomy.field_defaults
+        space_type_value = result.space_type.value if result.space_type else None
+
+        points_default = (
+            defaults.get("points", {})
+            .get("default_by_space_type", {})
+            .get(space_type_value)
+        )
+        if points_default and not result.points:
+            result.points = [
+                RecognizedField(
+                    name="point",
+                    value={"name": point, "count": 1},
+                    source=FieldSource.DEFAULT,
+                    confidence=0.6,
+                )
+                for point in points_default
+            ]
+
+        if result.timeline is None and defaults.get("timeline", {}).get("default_value"):
+            result.timeline = RecognizedField(
+                name="timeline",
+                value=defaults["timeline"]["default_value"],
+                source=FieldSource.DEFAULT,
+                confidence=0.5,
+            )
+
+        return result
+
 
 _intent_service: IntentRecognitionService | None = None
 

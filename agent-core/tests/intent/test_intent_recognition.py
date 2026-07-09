@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from app.services.intent_recognition import IntentRecognitionService
-from app.services.intent_recognition_result import FieldSource
+from app.services.intent_recognition_result import FieldSource, IntentRecognitionResult, RecognizedField
 from app.services.semantic_matcher import SemanticMatcher
 
 
@@ -67,3 +67,29 @@ async def test_match_points(service: IntentRecognitionService) -> None:
     names = [str(p.value.get("name", "")) for p in result.points]
     assert "门头" in names
     assert "DP点" in names
+
+
+@pytest.mark.asyncio
+async def test_apply_defaults(service: IntentRecognitionService) -> None:
+    result = await service.recognize("快闪店")
+    result = service.apply_defaults(result)
+    names = [str(p.value.get("name")) for p in result.points]
+    assert "门头" in names
+    assert "DP点" in names
+    assert "合影墙" in names
+    assert result.timeline is not None
+
+
+def test_fill_missing_from_context(service: IntentRecognitionService) -> None:
+    previous = IntentRecognitionResult(
+        style=RecognizedField(name="style", value="国潮", source=FieldSource.EXACT, confidence=1.0),
+        color_preference=RecognizedField(
+            name="color_preference", value="红色", source=FieldSource.EXACT, confidence=1.0
+        ),
+    )
+    current = IntentRecognitionResult(raw_text="购物中心中庭")
+    filled = service.fill_missing_from_context(current, previous)
+    assert filled.style is not None
+    assert filled.style.value == "国潮"
+    assert filled.color_preference is not None
+    assert filled.color_preference.value == "红色"
