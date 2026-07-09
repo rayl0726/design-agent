@@ -39,3 +39,21 @@ class PromptTemplateLoader:
 
     def list_templates(self) -> list[str]:
         return sorted(p.stem for p in self.template_dir.glob("*.yaml"))
+
+    def select_for_space_type(self, space_type: str | None) -> str:
+        if not space_type:
+            return "generic_commercial_display"
+        candidates: list[tuple[str, int]] = []
+        for stem in self.list_templates():
+            try:
+                template = self.load(stem)
+            except Exception:
+                continue
+            for candidate_space in template.space_types:
+                if candidate_space == space_type:
+                    return stem
+                if candidate_space in space_type or space_type in candidate_space:
+                    candidates.append((stem, len(candidate_space)))
+        if candidates:
+            return max(candidates, key=lambda x: x[1])[0]
+        return "generic_commercial_display"
