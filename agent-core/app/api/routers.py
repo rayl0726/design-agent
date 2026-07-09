@@ -1,6 +1,7 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Body
-from typing import Optional, List
-import json
+from __future__ import annotations
+
+from fastapi import APIRouter, Body
+from pydantic import BaseModel
 
 from app.agents.input_parser import PhotoParser, VideoParser, CADParser, PDFParser, PPTParser, ReferenceParser, TextParser, InputMerger
 from app.agents.requirement_analyst import RequirementAnalyst
@@ -9,8 +10,15 @@ from app.agents.concept_designer import ConceptDesignerAgent
 from app.agents.visual_designer import VisualDesignerAgent
 from app.agents.technical_designer import TechnicalDesignerAgent
 from app.services.doc_generator import doc_generator
+from app.services.negative_prompt_builder import NegativePromptBuilder
+from app.services.prompt_template_loader import PromptTemplateLoader
+from app.services.prompt_template_renderer import PromptTemplateRenderer
 
 router = APIRouter()
+
+_prompt_template_loader = PromptTemplateLoader()
+_prompt_template_renderer = PromptTemplateRenderer()
+_negative_prompt_builder = NegativePromptBuilder()
 
 
 # ---------- 输入解析器 ----------
@@ -177,3 +185,46 @@ async def generate_document(payload: dict = Body(...)):
         "ppt": ppt_path,
         "pdf": pdf_path,
     }
+
+
+# ---------- Prompt 预览 ----------
+
+class PromptPreviewRequest(BaseModel):
+    theme: str
+    space_type: str
+    budget_level: str | None = None
+    style: str | None = None
+    negative_prompts: list[str] | None = None
+
+
+class PromptPreviewResponse(BaseModel):
+    positive: str
+    negative: str
+    template_version: str
+    aspect_ratio: str
+
+
+@router.post("/api/v1/prompt-preview", response_model=PromptPreviewResponse)
+async def preview_prompt(req: PromptPreviewRequest) -> PromptPreviewResponse:
+    template_name = _prompt_template_loader.select_for_space_type(req.space_type)
+    template = _prompt_template_loader.load(template_name)
+    negative = _negative_prompt_builder.build(
+        space_type=req.space_type,
+        user_negative=req.negative_prompts,
+    )
+    rendered = await _prompt_template_renderer.render(
+        template,
+        {
+            "theme": req.theme,
+            "space_type": req.space_type,
+            "budget_level": req.budget_level or "medium",
+            "style": req.style,
+            "negative_prompts": negative.split(", ") if negative else [],
+        },
+    )
+    return PromptPreviewResponse(
+        positive=rendered.positive,
+        negative=rendered.negative,
+        template_version=rendered.version,
+        aspect_ratio=rendered.aspect_ratio,
+    )
