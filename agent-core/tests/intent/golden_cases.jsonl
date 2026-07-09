@@ -1,0 +1,7 @@
+{"input": "购物中心中庭海洋主题，预算15万", "expected": {"space_type": "购物中心中庭", "budget": 150000, "budget_level": "medium"}, "tags": ["exact", "budget"]}
+{"input": "新春国潮快闪", "expected": {"space_type": "快闪店"}, "tags": ["alias"]}
+{"input": "百货入口轻奢灯光装置", "expected": {"space_type": "百货入口"}, "tags": ["fuzzy"]}
+{"input": "商场入口国潮美陈", "expected": {"space_type": "百货入口"}, "tags": ["semantic"]}
+{"input": "夏季度假风步行街", "expected": {"space_type": "步行街"}, "tags": ["exact"]}
+{"input": "快闪店需要门头×2、DP点×3、合影墙", "expected": {"space_type": "快闪店", "points": [{"name": "门头", "count": 2}, {"name": "DP点", "count": 3}, {"name": "合影墙", "count": 1}]}, "tags": ["points"]}
+{"input": "低预算，中式风格", "expected": {"budget_level": "low", "style": "国潮"}, "tags": ["budget_level", "style"]}

@@ -51,6 +51,12 @@ public class StageLog {
     @Column(name = "metadata_json", columnDefinition = "TEXT")
     private String metadataJson;
 
+    @Column(name = "time_anomaly", nullable = false)
+    private boolean timeAnomaly = false;
+
+    @Column(name = "sub_stage_overflow", nullable = false)
+    private boolean subStageOverflow = false;
+
     @Column(name = "user_id")
     private Long userId;
 
@@ -63,6 +69,10 @@ public class StageLog {
     private LocalDateTime updatedAt;
 
     public StageLog() {}
+
+    public boolean isRunning() {
+        return "RUNNING".equals(this.status);
+    }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -99,6 +109,12 @@ public class StageLog {
 
     public String getMetadataJson() { return metadataJson; }
     public void setMetadataJson(String metadataJson) { this.metadataJson = metadataJson; }
+
+    public boolean isTimeAnomaly() { return timeAnomaly; }
+    public void setTimeAnomaly(boolean timeAnomaly) { this.timeAnomaly = timeAnomaly; }
+
+    public boolean isSubStageOverflow() { return subStageOverflow; }
+    public void setSubStageOverflow(boolean subStageOverflow) { this.subStageOverflow = subStageOverflow; }
 
     public Long getUserId() { return userId; }
     public void setUserId(Long userId) { this.userId = userId; }

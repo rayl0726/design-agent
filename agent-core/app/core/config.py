@@ -61,5 +61,7 @@ class Settings(BaseSettings):
     images_per_point: int = 1
     max_parallel_images: int = 8
 
+    intent_parser_legacy: bool = False
+
 
 settings = Settings()

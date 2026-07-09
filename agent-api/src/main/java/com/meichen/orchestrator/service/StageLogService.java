@@ -11,10 +11,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class StageLogService {
@@ -24,6 +24,7 @@ public class StageLogService {
     private final StageLogRepository stageLogRepository;
     private final PublicIdGenerator publicIdGenerator;
     private final ObjectMapper objectMapper;
+    private final ConcurrentHashMap<Long, Long> startNanos = new ConcurrentHashMap<>();
 
     public StageLogService(StageLogRepository stageLogRepository,
                            PublicIdGenerator publicIdGenerator,
@@ -64,6 +65,7 @@ public class StageLogService {
             log.setMetadataJson(toJson(metadata));
         }
         StageLog saved = stageLogRepository.save(log);
+        startNanos.put(saved.getId(), System.nanoTime());
         STAGE_LOG.info("[STAGE_START] project={} stage={} label={} logId={}",
                 projectId, stageName, stageLabel, saved.getId());
         return saved;
@@ -82,11 +84,22 @@ public class StageLogService {
             return null;
         }
         StageLog log = opt.get();
+        if (!log.isRunning()) {
+            STAGE_LOG.warn("[STAGE_COMPLETE] stageLogId={} already finalized, status={}", stageLogId, log.getStatus());
+            return log;
+        }
+
         log.setStatus("SUCCESS");
         log.setCompletedAt(LocalDateTime.now());
-        if (log.getStartedAt() != null) {
-            log.setDurationMs(ChronoUnit.MILLIS.between(log.getStartedAt(), log.getCompletedAt()));
+        long durationMs = computeDurationMs(stageLogId);
+        if (durationMs < 0) {
+            log.setDurationMs(null);
+            log.setTimeAnomaly(true);
+            STAGE_LOG.warn("[STAGE_TIME_ANOMALY] stageLogId={} durationMs={}", stageLogId, durationMs);
+        } else {
+            log.setDurationMs(durationMs);
         }
+
         if (metadata != null) {
             log.setMetadataJson(toJson(metadata));
         }
@@ -106,17 +119,51 @@ public class StageLogService {
             return null;
         }
         StageLog log = opt.get();
+        if (!log.isRunning()) {
+            STAGE_LOG.warn("[STAGE_FAIL] stageLogId={} already finalized, status={}", stageLogId, log.getStatus());
+            return log;
+        }
+
         log.setStatus("FAILED");
         log.setCompletedAt(LocalDateTime.now());
         log.setErrorMessage(errorMessage);
-        if (log.getStartedAt() != null) {
-            log.setDurationMs(ChronoUnit.MILLIS.between(log.getStartedAt(), log.getCompletedAt()));
+        long durationMs = computeDurationMs(stageLogId);
+        if (durationMs < 0) {
+            log.setDurationMs(null);
+            log.setTimeAnomaly(true);
+            STAGE_LOG.warn("[STAGE_TIME_ANOMALY] stageLogId={} durationMs={}", stageLogId, durationMs);
+        } else {
+            log.setDurationMs(durationMs);
         }
         StageLog saved = stageLogRepository.save(log);
         STAGE_LOG.error("[STAGE_FAILED] project={} stage={} label={} durationMs={} logId={} error={}",
                 log.getProjectId(), log.getStageName(), log.getStageLabel(),
                 log.getDurationMs(), saved.getId(), errorMessage);
         return saved;
+    }
+
+    private long computeDurationMs(Long stageLogId) {
+        Long startNano = startNanos.remove(stageLogId);
+        if (startNano == null) {
+            return -1;
+        }
+        return (System.nanoTime() - startNano) / 1_000_000L;
+    }
+
+    @Transactional
+    public StageLog startSubStage(Long parentId, String stageName, String stageLabel, Long userId) {
+        String projectId = null;
+        if (parentId != null) {
+            projectId = stageLogRepository.findById(parentId)
+                    .map(StageLog::getProjectId)
+                    .orElse(null);
+        }
+        return startStage(projectId, stageName, stageLabel, userId, parentId, null);
+    }
+
+    @Transactional
+    public StageLog completeSubStage(Long stageLogId) {
+        return completeStage(stageLogId, null);
     }
 
     @Transactional
