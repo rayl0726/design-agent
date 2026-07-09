@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import json
 import re
+from typing import Protocol
 
 import jieba  # type: ignore[import-untyped]
 from rapidfuzz import fuzz
@@ -12,7 +13,7 @@ from app.services.intent_recognition_result import (
     IntentRecognitionResult,
     RecognizedField,
 )
-from app.services.llm_client import llm_client
+from app.services.llm_client import llm_client as _default_llm_client
 from app.services.semantic_matcher import SemanticMatcher
 from app.services.taxonomy_loader import Taxonomy, load_taxonomy
 
@@ -21,10 +22,23 @@ FUZZY_THRESHOLD_CRITICAL = 0.85
 SEMANTIC_THRESHOLD = 0.82
 
 
+class LLMClient(Protocol):
+    async def complete(self, system: str, prompt: str, json_mode: bool = True) -> str:
+        ...
+
+
 class IntentRecognitionService:
-    def __init__(self, taxonomy: Taxonomy | None = None):
+    def __init__(
+        self,
+        taxonomy: Taxonomy | None = None,
+        llm_client: LLMClient | None = None,
+        semantic_matcher: SemanticMatcher | None = None,
+    ):
         self.taxonomy = taxonomy or load_taxonomy()
-        self.semantic = SemanticMatcher(self.taxonomy, threshold=SEMANTIC_THRESHOLD)
+        self._llm_client = llm_client or _default_llm_client
+        self._semantic_matcher = semantic_matcher or SemanticMatcher(
+            self.taxonomy, threshold=SEMANTIC_THRESHOLD
+        )
         self._load_jieba_dict()
 
     def _load_jieba_dict(self) -> None:
@@ -115,7 +129,7 @@ class IntentRecognitionService:
                 raw_text=" ".join(tokens),
             )
 
-        semantic_name, score = await self.semantic.match(" ".join(tokens), field_type)
+        semantic_name, score = await self._semantic_matcher.match(" ".join(tokens), field_type)
         if semantic_name:
             return RecognizedField(
                 name=field_type,
@@ -282,7 +296,7 @@ class IntentRecognitionService:
             f"{json.dumps(missing_fields, ensure_ascii=False, indent=2)}\n"
             '输出格式：{"space_type": "购物中心中庭", "budget": 150000}'
         )
-        raw = await llm_client.complete(system, prompt, json_mode=True)
+        raw = await self._llm_client.complete(system, prompt, json_mode=True)
         try:
             data = json.loads(raw or "{}")
         except json.JSONDecodeError:

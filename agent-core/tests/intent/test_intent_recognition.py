@@ -1,26 +1,34 @@
+from __future__ import annotations
+
 import pytest
 
-from app.services.embedding_client import embedding_client
 from app.services.intent_recognition import IntentRecognitionService
 from app.services.intent_recognition_result import FieldSource
-from app.services.llm_client import llm_client
+from app.services.semantic_matcher import SemanticMatcher
 
 
-@pytest.fixture(autouse=True)
-def _stub_external_providers(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _complete(*args: object, **kwargs: object) -> str:
-        return "{}"
+class DummyLLMClient:
+    def __init__(self, response: str = "{}") -> None:
+        self.response = response
 
-    async def _embed(*args: object, **kwargs: object) -> list[float]:
-        return [0.0] * 64
+    async def complete(self, system: str, prompt: str, json_mode: bool = True) -> str:
+        return self.response
 
-    monkeypatch.setattr(llm_client, "complete", _complete)
-    monkeypatch.setattr(embedding_client, "embed", _embed)
+
+class DummySemanticMatcher(SemanticMatcher):
+    def __init__(self) -> None:
+        pass
+
+    async def match(self, text: str, field_type: str) -> tuple[str | None, float]:
+        return None, 0.0
 
 
 @pytest.fixture
 def service() -> IntentRecognitionService:
-    return IntentRecognitionService()
+    return IntentRecognitionService(
+        llm_client=DummyLLMClient(),
+        semantic_matcher=DummySemanticMatcher(),
+    )
 
 
 @pytest.mark.asyncio
