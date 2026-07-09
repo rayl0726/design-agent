@@ -7,6 +7,7 @@ import com.meichen.orchestrator.repository.ProjectRepository;
 import com.meichen.orchestrator.util.PublicIdGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +26,7 @@ public class FeedbackService {
         this(feedbackRepository, projectRepository, publicIdGenerator, new ObjectMapper());
     }
 
+    @Autowired
     public FeedbackService(FeedbackRepository feedbackRepository, ProjectRepository projectRepository, PublicIdGenerator publicIdGenerator, ObjectMapper objectMapper) {
         this.feedbackRepository = feedbackRepository;
         this.projectRepository = projectRepository;
