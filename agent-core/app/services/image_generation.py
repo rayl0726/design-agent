@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 import asyncio
 import hashlib
-import json
 from abc import ABC, abstractmethod
 from pathlib import Path
 from urllib.parse import quote
@@ -8,6 +9,9 @@ from urllib.parse import quote
 import httpx
 
 from app.core.config import settings
+from app.services.negative_prompt_builder import NegativePromptBuilder
+from app.services.prompt_template_loader import PromptTemplateLoader
+from app.services.prompt_template_renderer import PromptTemplateRenderer
 
 
 class ImageGenerationProvider(ABC):
@@ -191,6 +195,9 @@ class ImageGenerationService:
             ComfyUIProvider(),
             PlaceholderProvider(),
         ]
+        self._template_loader = PromptTemplateLoader()
+        self._template_renderer = PromptTemplateRenderer()
+        self._negative_builder = NegativePromptBuilder()
 
     async def generate(self, prompt: str, aspect_ratio: str = "16:9", style: str = "realistic") -> str:
         last_error = None
@@ -206,6 +213,56 @@ class ImageGenerationService:
                 print(f"[ImageGenerationService] {provider_name} failed: {e}")
                 continue
         raise RuntimeError(f"所有图像生成提供者均失败: {last_error}")
+
+    async def generate_from_intent(
+        self,
+        intent: dict,
+        template_version: str | None = None,
+        aspect_ratio: str = "16:9",
+        style: str = "realistic",
+    ) -> dict:
+        """Render prompt from intent and generate image. Returns metadata dict."""
+        if template_version:
+            template = self._template_loader.load(template_version)
+            space_type = intent.get("space_type")
+            negative = self._negative_builder.build(
+                space_type=space_type,
+                user_negative=intent.get("negative_prompts"),
+            )
+            rendered = await self._template_renderer.render(
+                template,
+                {**intent, "negative_prompts": negative.split(", ") if negative else []},
+            )
+            prompt = rendered.positive
+            final_negative = rendered.negative
+        else:
+            prompt = self._legacy_prompt(intent)
+            final_negative = self._negative_builder.build(
+                space_type=intent.get("space_type"),
+                user_negative=intent.get("negative_prompts"),
+            )
+            rendered = None
+
+        filename = await self.generate(prompt, aspect_ratio, style)
+        return {
+            "filename": filename,
+            "prompt": prompt,
+            "negative_prompt": final_negative,
+            "template_version": rendered.version if rendered else None,
+            "aspect_ratio": aspect_ratio,
+        }
+
+    def _legacy_prompt(self, intent: dict) -> str:
+        parts = [
+            f"Commercial display design for {intent.get('space_type', 'commercial space')}",
+        ]
+        if intent.get("theme"):
+            parts.append(f"theme: {intent['theme']}")
+        if intent.get("style"):
+            parts.append(f"style: {intent['style']}")
+        if intent.get("budget_level"):
+            parts.append(f"budget level: {intent['budget_level']}")
+        return ", ".join(parts)
 
 
 image_generation = ImageGenerationService()

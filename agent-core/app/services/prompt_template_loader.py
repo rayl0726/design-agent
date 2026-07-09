@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 import yaml
 
@@ -18,8 +17,11 @@ class PromptTemplate:
 
 
 class PromptTemplateLoader:
-    def __init__(self, template_dir: str | Path = "agent-core/data/prompt_templates"):
-        self.template_dir = Path(template_dir)
+    def __init__(self, template_dir: str | Path | None = None):
+        if template_dir is None:
+            self.template_dir = Path(__file__).resolve().parents[2] / "data" / "prompt_templates"
+        else:
+            self.template_dir = Path(template_dir)
 
     def load(self, name: str) -> PromptTemplate:
         path = self.template_dir / f"{name}.yaml"

@@ -7,8 +7,11 @@ import yaml
 
 
 class NegativePromptBuilder:
-    def __init__(self, config_dir: str | Path = "agent-core/data/negative_prompts"):
-        self.config_dir = Path(config_dir)
+    def __init__(self, config_dir: str | Path | None = None):
+        if config_dir is None:
+            self.config_dir = Path(__file__).resolve().parents[2] / "data" / "negative_prompts"
+        else:
+            self.config_dir = Path(config_dir)
         self._config = self._load()
 
     def _load(self) -> dict[str, Any]:
