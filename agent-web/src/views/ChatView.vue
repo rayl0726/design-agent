@@ -181,7 +181,7 @@
     <div v-loading="logLoading" class="log-content">
       <div v-if="stageLogs.length" class="stage-log-list">
         <div
-          v-for="log in stageLogs"
+          v-for="log in stageLogTree"
           :key="log.id"
           class="stage-log-item"
           :class="'status-' + log.status.toLowerCase()"
@@ -190,6 +190,8 @@
             <span class="stage-status-dot"></span>
             <span class="stage-name">{{ log.stageLabel || log.stageName }}</span>
             <span class="stage-status">{{ formatStageStatus(log.status) }}</span>
+            <el-tag v-if="log.timeAnomaly" size="small" type="warning">时间异常</el-tag>
+            <el-tag v-if="log.subStageOverflow" size="small" type="danger">子阶段溢出</el-tag>
           </div>
           <div class="stage-log-meta">
             <span v-if="log.startedAt">开始：{{ formatTime(log.startedAt) }}</span>
@@ -204,6 +206,17 @@
             <span v-if="log.metadata.failed_images > 0" class="stage-log-fail-count">
               （{{ log.metadata.failed_images }} 张失败）
             </span>
+          </div>
+          <div v-if="log.children && log.children.length" class="stage-log-children">
+            <div
+              v-for="child in log.children"
+              :key="child.id"
+              class="stage-log-child"
+              :class="'status-' + child.status.toLowerCase()"
+            >
+              <span class="stage-name">{{ child.stageLabel || child.stageName }}</span>
+              <span v-if="child.durationMs != null" class="stage-duration">{{ formatDuration(child.durationMs) }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -244,6 +257,15 @@ let sseReconnectTimer = null
 
 const sortedSessions = computed(() => {
   return [...sessions.value].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+})
+
+const stageLogTree = computed(() => {
+  const parents = stageLogs.value.filter((l) => l.parentId == null)
+  const children = stageLogs.value.filter((l) => l.parentId != null)
+  return parents.map((p) => ({
+    ...p,
+    children: children.filter((c) => c.parentId === p.id)
+  }))
 })
 
 const lastUserMessageIndex = computed(() => {
@@ -1222,5 +1244,23 @@ watch(() => route.params.id, (newId) => {
 .stage-log-fail-count {
   color: #dc2626;
   font-weight: 500;
+}
+
+.stage-log-children {
+  margin-top: 8px;
+  padding-left: 16px;
+  border-left: 2px solid #e4e7ed;
+}
+
+.stage-log-child {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 13px;
+  color: #606266;
+}
+
+.stage-log-child .stage-duration {
+  font-family: monospace;
 }
 </style>
