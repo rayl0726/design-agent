@@ -29,6 +29,8 @@ public class WorkflowEngine {
     private final com.meichen.orchestrator.service.ThinkingLogService thinkingLogService;
     private final com.meichen.orchestrator.service.SseEmitterService sseEmitterService;
     private final com.meichen.orchestrator.service.StageLogService stageLogService;
+    private static final String SUBSTAGE_AGENT_CORE_CALL = "agent_core_call";
+    private static final String SUBSTAGE_RESULT_PARSE = "result_parse";
 
     private static final Map<String, String> NODE_LABELS = Map.ofEntries(
         Map.entry("text_parse", "解析文本输入"),
@@ -50,8 +52,9 @@ public class WorkflowEngine {
                           com.meichen.orchestrator.service.ThinkingLogService thinkingLogService,
                           com.meichen.orchestrator.service.SseEmitterService sseEmitterService,
                           com.meichen.orchestrator.service.StageLogService stageLogService,
+                          RestTemplate restTemplate,
                           @Value("${agent-core.base-url:http://localhost:8000}") String agentCoreBaseUrl) {
-        this.restTemplate = new RestTemplate();
+        this.restTemplate = restTemplate;
         this.agentCoreBaseUrl = agentCoreBaseUrl.endsWith("/") ? agentCoreBaseUrl.substring(0, agentCoreBaseUrl.length() - 1) : agentCoreBaseUrl;
         this.logRepository = logRepository;
         this.thinkingLogService = thinkingLogService;
@@ -150,7 +153,7 @@ public class WorkflowEngine {
         return outputs;
     }
 
-    private Object runNode(String projectId, WorkflowNode node, Map<String, Object> outputs, Long userId) {
+    Object runNode(String projectId, WorkflowNode node, Map<String, Object> outputs, Long userId) {
         log.debug("runNode called for node: {}, project: {}", node.name(), projectId);
         String stageLabel = NODE_LABELS.getOrDefault(node.name(), node.name());
         StageLog stageLog = stageLogService.startStage(projectId, node.name(), stageLabel, userId);
@@ -165,7 +168,77 @@ public class WorkflowEngine {
             ));
         }
 
-        // Build payload based on node contract
+        Map<String, Object> payload = buildPayload(node, outputs);
+        log.debug("Sending request to endpoint: {} with payload size: {}", node.endpoint(), payload.size());
+
+        StageLog networkSub = stageLogService.startSubStage(stageLog.getId(), SUBSTAGE_AGENT_CORE_CALL, "调用Agent-Core", userId);
+        int retries = 0;
+        Exception lastError = null;
+        String body = null;
+
+        while (retries < MAX_RETRIES) {
+            try {
+                String url = agentCoreBaseUrl + node.endpoint();
+                log.debug("Calling endpoint {} for node {}", url, node.name());
+
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
+
+                ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
+                body = response.getBody();
+                log.debug("Received response for node {} (status={}, length={})", node.name(), response.getStatusCode(), body != null ? body.length() : 0);
+                break;
+            } catch (Exception e) {
+                lastError = e;
+                retries++;
+                log.warn("Node {} attempt {} failed: {}", node.name(), retries, e.getMessage());
+                try {
+                    Thread.sleep(1000L * retries);
+                } catch (InterruptedException ignored) {}
+            }
+        }
+
+        if (body == null) {
+            String errorMsg = lastError != null ? lastError.getMessage() : "Unknown error";
+            stageLogService.failStage(networkSub.getId(), errorMsg);
+            return failNode(projectId, node, stageLog, errorMsg, retries, logThinking, userId, lastError);
+        }
+        stageLogService.completeSubStage(networkSub.getId());
+
+        StageLog parseSub = stageLogService.startSubStage(stageLog.getId(), SUBSTAGE_RESULT_PARSE, "解析结果", userId);
+        Object result;
+        Map<String, Object> metadata;
+        try {
+            result = parseJson(body);
+            metadata = buildStageMetadata(node.name(), result);
+        } catch (Exception e) {
+            stageLogService.failStage(parseSub.getId(), e.getMessage());
+            return failNode(projectId, node, stageLog, e.getMessage(), retries, logThinking, userId, e);
+        }
+        stageLogService.completeSubStage(parseSub.getId());
+
+        WorkflowLog successLog = new WorkflowLog();
+        successLog.setProjectId(projectId);
+        successLog.setNodeName(node.name());
+        successLog.setStatus("success");
+        successLog.setOutputJson(body);
+        successLog.setRetryCount(retries);
+        logRepository.save(successLog);
+        if (logThinking) {
+            thinkingLogService.logCompleted(projectId, node.name(), userId);
+            sseEmitterService.sendToProject(projectId, "thinking", Map.of(
+                "node_name", node.name(),
+                "status", "completed",
+                "message", getNodeMessage(node.name())
+            ));
+        }
+
+        stageLogService.completeStage(stageLog.getId(), metadata);
+        return result;
+    }
+
+    private Map<String, Object> buildPayload(WorkflowNode node, Map<String, Object> outputs) {
         Map<String, Object> payload;
         List<String> deps = node.dependencies();
 
@@ -185,86 +258,35 @@ public class WorkflowEngine {
                 .collect(Collectors.toList());
             payload = Map.of("parsed_results", parsedResults);
         } else if ("visual_design".equals(node.name()) && deps.size() == 1) {
-            // visual_design 需要 concept_design 输出和 requirement_analyze
             payload = new HashMap<>();
             payload.put("concept_design", outputs.get(deps.get(0)));
             payload.put("requirement_analyze", outputs.get("requirement_analyze"));
         } else if ("technical_design".equals(node.name())) {
-            // Multi-dependency nodes expect {"dep_name": output, ...}
             payload = new HashMap<>();
             for (String dep : deps) {
                 payload.put(dep, outputs.get(dep));
             }
         } else if (deps.size() == 1) {
-            // Single-dependency nodes expect the dependency output directly
             payload = new HashMap<>();
             Object depOutput = outputs.get(deps.get(0));
             if (depOutput instanceof Map) {
                 payload.putAll((Map<String, Object>) depOutput);
             }
         } else {
-            // Multi-dependency nodes expect {"dep_name": output, ...}
             payload = new HashMap<>();
             for (String dep : deps) {
                 payload.put(dep, outputs.get(dep));
             }
         }
+        return payload;
+    }
 
-        log.debug("Sending request to endpoint: {} with payload size: {}", node.endpoint(), payload.size());
-
-        int retries = 0;
-        Exception lastError = null;
-
-        while (retries < MAX_RETRIES) {
-            try {
-                String url = agentCoreBaseUrl + node.endpoint();
-                log.debug("Calling endpoint {} for node {}", url, node.name());
-
-                HttpHeaders headers = new HttpHeaders();
-                headers.setContentType(MediaType.APPLICATION_JSON);
-                HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
-
-                ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
-                String body = response.getBody();
-                log.debug("Received response for node {} (status={}, length={})", node.name(), response.getStatusCode(), body != null ? body.length() : 0);
-
-                // Log success
-                WorkflowLog successLog = new WorkflowLog();
-                successLog.setProjectId(projectId);
-                successLog.setNodeName(node.name());
-                successLog.setStatus("success");
-                successLog.setOutputJson(body);
-                successLog.setRetryCount(retries);
-                logRepository.save(successLog);
-                if (logThinking) {
-                    thinkingLogService.logCompleted(projectId, node.name(), userId);
-                    sseEmitterService.sendToProject(projectId, "thinking", Map.of(
-                        "node_name", node.name(),
-                        "status", "completed",
-                        "message", getNodeMessage(node.name())
-                    ));
-                }
-
-                Object result = parseJson(body);
-                Map<String, Object> metadata = buildStageMetadata(node.name(), result);
-                stageLogService.completeStage(stageLog.getId(), metadata);
-                return result;
-            } catch (Exception e) {
-                lastError = e;
-                retries++;
-                log.warn("Node {} attempt {} failed: {}", node.name(), retries, e.getMessage());
-                try {
-                    Thread.sleep(1000L * retries);
-                } catch (InterruptedException ignored) {}
-            }
-        }
-
-        // Log failure
+    private Object failNode(String projectId, WorkflowNode node, StageLog stageLog, String errorMsg,
+                            int retries, boolean logThinking, Long userId, Exception lastError) {
         WorkflowLog failLog = new WorkflowLog();
         failLog.setProjectId(projectId);
         failLog.setNodeName(node.name());
         failLog.setStatus("failed");
-        String errorMsg = lastError != null ? lastError.getMessage() : "Unknown error";
         failLog.setErrorMessage(errorMsg);
         failLog.setRetryCount(retries);
         logRepository.save(failLog);
@@ -278,7 +300,7 @@ public class WorkflowEngine {
         }
 
         stageLogService.failStage(stageLog.getId(), errorMsg);
-        throw new RuntimeException("Node " + node.name() + " failed after " + MAX_RETRIES + " retries", lastError);
+        throw new RuntimeException("Node " + node.name() + " failed after " + (retries > 0 ? retries : MAX_RETRIES) + " retries", lastError);
     }
 
     private boolean isDependencyOf(String candidate, String target, List<WorkflowNode> nodes) {
