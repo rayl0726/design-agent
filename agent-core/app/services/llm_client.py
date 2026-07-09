@@ -153,13 +153,13 @@ class ZhipuProvider(LLMProvider):
             return data.get("choices", [{}])[0].get("message", {}).get("content", "")
         except httpx.HTTPStatusError as e:
             print(f"Zhipu HTTP error: {e.response.status_code} - {e.response.text[:300]}")
-            return ""
+            raise
         except httpx.TimeoutException as e:
             print(f"Zhipu timeout: {e}")
-            return ""
+            raise
         except Exception as e:
             print(f"Zhipu call failed: {type(e).__name__}: {e}")
-            return ""
+            raise
 
     async def stream(
         self,
@@ -198,11 +198,9 @@ class ZhipuProvider(LLMProvider):
 class LLMClient:
     """统一 LLM 客户端，支持 provider 选择和自动 fallback。"""
 
-    def __init__(self, primary_provider: LLMProvider | None = None, fallback_provider: LLMProvider | None = None):
-        # 默认根据配置选择 primary provider
+    def __init__(self, primary_provider: LLMProvider | None = None):
+        # 默认根据配置选择 primary provider；不再设置本地 Ollama fallback
         self.primary_provider = primary_provider or self._create_provider(settings.llm_provider)
-        # fallback 固定为本地 Ollama
-        self.fallback_provider = fallback_provider or OllamaProvider()
 
     @staticmethod
     def _create_provider(provider_name: str) -> LLMProvider:
@@ -217,16 +215,8 @@ class LLMClient:
         json_mode: bool = False,
         temperature: float = 0.7,
     ) -> str:
-        # 优先使用主 provider
-        result = await self.primary_provider.complete(
-            system_prompt, user_prompt, json_mode, temperature
-        )
-        if result:
-            return result
-
-        # 主 provider 失败时 fallback 到本地 Ollama
-        print("[LLMClient] primary provider failed, falling back to Ollama")
-        return await self.fallback_provider.complete(
+        # 仅使用主 provider；失败直接抛出异常，不再 fallback 到本地 Ollama
+        return await self.primary_provider.complete(
             system_prompt, user_prompt, json_mode, temperature
         )
 
@@ -236,19 +226,11 @@ class LLMClient:
         user_prompt: str,
         temperature: float = 0.7,
     ) -> AsyncIterator[str]:
-        # 优先使用主 provider
-        try:
-            async for chunk in self.primary_provider.stream(system_prompt, user_prompt, temperature):
-                if chunk:
-                    yield chunk
-                    return
-        except Exception as e:
-            print(f"[LLMClient] primary stream failed: {e}")
-
-        # fallback
-        print("[LLMClient] primary stream failed, falling back to Ollama")
-        async for chunk in self.fallback_provider.stream(system_prompt, user_prompt, temperature):
-            yield chunk
+        # 仅使用主 provider；失败直接抛出异常
+        async for chunk in self.primary_provider.stream(system_prompt, user_prompt, temperature):
+            if chunk:
+                yield chunk
+                return
 
 
 llm_client = LLMClient()

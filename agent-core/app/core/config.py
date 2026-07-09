@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     zhipu_api_key: str = ""
     zhipu_base_url: str = "https://open.bigmodel.cn/api/paas/v4"
     zhipu_model: str = "GLM-4.7-Flash"
-    zhipu_vlm_model: str = "glm-4v-flash"
+    zhipu_vlm_model: str = "GLM-4.7-Flash"
     zhipu_embedding_model: str = "embedding-3"
     zhipu_image_model: str = "cogview-3-plus"
 

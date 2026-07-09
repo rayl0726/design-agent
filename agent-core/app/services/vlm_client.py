@@ -128,17 +128,15 @@ class ZhipuVLMClient(BaseVLMClient):
             return data.get("choices", [{}])[0].get("message", {}).get("content", "")
         except httpx.HTTPStatusError as e:
             print(f"Zhipu VLM HTTP error: {e.response.status_code} - {e.response.text[:300]}")
-            return ""
+            raise
         except Exception as e:
             print(f"Zhipu VLM call failed: {type(e).__name__}: {e}")
-            return ""
+            raise
 
 
 def create_vlm_client() -> BaseVLMClient:
-    provider = settings.vlm_provider.lower()
-    if provider == "zhipu":
-        return ZhipuVLMClient()
-    return OllamaVLMClient()
+    # 固定使用智谱 VLM；不再 fallback 到本地 Ollama
+    return ZhipuVLMClient()
 
 
 vlm_client = create_vlm_client()
