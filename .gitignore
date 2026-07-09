@@ -9,3 +9,8 @@ node_modules/
 *.log
 .vscode
 design-data
+agent-core/.venv/
+agent-core/meichen_ai.egg-info/
+__pycache__/
+*.pyc
+.pytest_cache/

@@ -50,7 +50,12 @@ class SemanticMatcher:
         if not candidates:
             return None, 0.0
 
-        query_emb = await self._embed(text)
+        try:
+            query_emb = await self._embed(text)
+        except Exception as e:
+            print(f"SemanticMatcher embedding failed for '{text[:50]}': {type(e).__name__}: {e}")
+            return None, 0.0
+
         best_name: str | None = None
         best_score = 0.0
         for name, aliases in candidates:
@@ -58,8 +63,14 @@ class SemanticMatcher:
             scores: list[float] = []
             for t in texts:
                 key = t.lower()
-                emb = await self._embed(key)
-                scores.append(self._cosine_similarity(query_emb, emb))
+                try:
+                    emb = await self._embed(key)
+                    scores.append(self._cosine_similarity(query_emb, emb))
+                except Exception as e:
+                    print(f"SemanticMatcher embedding failed for candidate '{key}': {type(e).__name__}: {e}")
+                    continue
+            if not scores:
+                continue
             score = max(scores)
             if score > best_score:
                 best_score = score
