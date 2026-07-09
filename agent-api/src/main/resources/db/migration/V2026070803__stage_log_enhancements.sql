@@ -1,0 +1,3 @@
+ALTER TABLE stage_logs
+    ADD COLUMN time_anomaly BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN sub_stage_overflow BOOLEAN NOT NULL DEFAULT FALSE;
