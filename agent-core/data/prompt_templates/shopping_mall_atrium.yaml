@@ -1,0 +1,26 @@
+name: shopping_mall_atrium
+version: "1.0"
+space_types:
+  - "购物中心中庭"
+  - "商场中庭"
+aspect_ratio: "16:9"
+sections:
+  subject: |
+    A striking commercial display installation dominating the very center of a shopping mall atrium,
+    {{ theme }} theme, {{ budget_level }} budget, designed for maximum visual impact.
+    The installation occupies the central foreground and is the single largest and brightest element in the frame.
+  environment: |
+    Elegant multi-floor shopping mall atrium with glass railings and soft architectural lines visible only at the edges;
+    keep the surrounding mall structure blurred and low-detail so the display remains the hero.
+  camera_angle: |
+    Centered straight-on perspective from the ground floor looking toward the middle of the atrium,
+    symmetrical composition, the display perfectly centered in the frame.
+  lighting: |
+    Bright, even commercial lighting focused on the central display, warm welcoming atmosphere,
+    subtle ambient light on the atrium ceiling.
+  style: |
+    Photorealistic 3D architectural visualization, premium commercial photography, crisp detail on the display,
+    clean and modern.
+  negative: |
+    blurry, low quality, distorted, cluttered background, crowds of people, cars, street view, text, watermark,
+    frame, border, busy shoppers, distracting signs, uneven lighting
