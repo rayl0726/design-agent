@@ -13,10 +13,41 @@ from fastapi import UploadFile
 from app.core.config import settings
 from app.services.embedding_client import embedding_client
 from app.services.intent_recognition import get_intent_service
+from app.services.taxonomy_loader import load_taxonomy
 from app.services.vlm_client import vlm_client
 
 UPLOAD_ROOT = Path(settings.upload_dir)
 UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+
+_TAXONOMY = load_taxonomy()
+
+
+def _taxonomy_prompt_fragment() -> str:
+    space_types = [s["name"] for s in _TAXONOMY.space_types]
+    points = [p["name"] for p in _TAXONOMY.points]
+    styles = [s["name"] for s in _TAXONOMY.styles]
+    materials = [m["name"] for m in _TAXONOMY.materials]
+    return (
+        "空间类型必须从以下候选中选择：" + ", ".join(space_types) + "\n"
+        "点位必须从以下候选中选择：" + ", ".join(points) + "\n"
+        "风格必须从以下候选中选择：" + ", ".join(styles) + "\n"
+        "材质必须从以下候选中选择：" + ", ".join(materials) + "\n"
+        "无法确定时请返回 null。"
+    )
+
+
+def _normalize_vlm_value(value: Any, field: str) -> Any:
+    if not value or not isinstance(value, str):
+        return value
+    lowered = value.lower()
+    mapping: dict[str, dict[str, str]] = {
+        "space_type": _TAXONOMY.alias_to_space_type,
+        "style": _TAXONOMY.alias_to_style,
+        "material": _TAXONOMY.alias_to_material,
+        "point": _TAXONOMY.alias_to_point,
+    }
+    alias_map = mapping.get(field, {})
+    return alias_map.get(lowered, value)
 
 
 def _save_upload(file: UploadFile, project_id: str, prefix: str) -> Path:
@@ -31,22 +62,26 @@ def _save_upload(file: UploadFile, project_id: str, prefix: str) -> Path:
 class PhotoParser:
     SYSTEM = "你是一位商业空间视觉分析师，擅长从照片中识别空间类型、尺寸感、人流特征和现有装饰。"
 
+    def _normalize_vlm_value(self, value: Any, field: str) -> Any:
+        return _normalize_vlm_value(value, field)
+
     async def parse(self, image_path: Path | str) -> dict[str, Any]:
         prompt = (
-            "请分析这张现场照片，输出以下 JSON 字段（只输出 JSON，不要多余文字）：\n"
-            '{"space_type": "空间类型（中庭/走廊/入口/快闪店等）", '
-            '"estimated_area": "估算面积（如约200平米）", '
-            '"ceiling_height": "天花板高度估算", '
-            '"existing_elements": ["现有装饰物/设施列表"], '
+            "你是一位商业空间视觉分析师。请分析这张现场照片，输出以下 JSON 字段（只输出 JSON，不要多余文字）：\n"
+            '{"space_type": "空间类型", "estimated_area": "估算面积", '
+            '"ceiling_height": "天花板高度", '
+            '"existing_elements": ["现有装饰物"], '
             '"lighting_condition": "光照条件", '
             '"crowd_flow": "人流特征", '
-            '"notes": "其他观察"}'
+            '"notes": "其他观察"}\n'
+            + _taxonomy_prompt_fragment()
         )
         raw = await vlm_client.describe(str(image_path), prompt, json_mode=True)
         try:
-            data = json.loads(raw)
+            data: dict[str, Any] = json.loads(raw)
         except json.JSONDecodeError:
             data = {"raw_description": raw, "parse_error": True}
+        data["space_type"] = self._normalize_vlm_value(data.get("space_type"), "space_type")
         data["source_type"] = "photo"
         data["file_path"] = str(image_path)
         return data
@@ -89,18 +124,26 @@ class VideoParser:
 
 
 class ReferenceParser:
+    def _normalize_vlm_value(self, value: Any, field: str) -> Any:
+        return _normalize_vlm_value(value, field)
+
     async def parse(self, image_path: Path | str) -> dict[str, Any]:
         prompt = (
             "请分析这张参考图，输出以下 JSON 字段（只输出 JSON）：\n"
-            '{"style": "风格标签", "theme": "主题标签", "color_palette": ["主要颜色"], '
-            '"materials": ["材质标签"], "space_type": "适用空间类型", '
-            '"design_elements": ["设计元素"], "mood": "氛围关键词"}'
+            '{"style": "风格", "theme": "主题", "color_palette": ["主要颜色"], '
+            '"materials": ["材质"], "space_type": "适用空间类型", '
+            '"design_elements": ["设计元素"], "mood": "氛围关键词"}\n'
+            + _taxonomy_prompt_fragment()
         )
         raw = await vlm_client.describe(str(image_path), prompt, json_mode=True)
         try:
-            data = json.loads(raw)
+            data: dict[str, Any] = json.loads(raw)
         except json.JSONDecodeError:
             data = {"raw_description": raw, "parse_error": True}
+        data["style"] = self._normalize_vlm_value(data.get("style"), "style")
+        if "materials" in data and isinstance(data["materials"], list):
+            data["materials"] = [self._normalize_vlm_value(m, "material") for m in data["materials"]]
+        data["space_type"] = self._normalize_vlm_value(data.get("space_type"), "space_type")
         data["source_type"] = "reference"
         data["file_path"] = str(image_path)
         return data
