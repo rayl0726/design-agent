@@ -117,4 +117,33 @@ class FeedbackServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Project not found");
     }
+
+    @Test
+    void saveFeedback_shouldStoreImageFeedbackWithPromptVersion() {
+        String projectId = "project-1";
+        Long userId = 42L;
+        Project project = new Project();
+        project.setId(projectId);
+        project.setUserId(userId);
+
+        when(projectRepository.findByIdAndUserId(projectId, userId)).thenReturn(Optional.of(project));
+        when(feedbackRepository.save(any(Feedback.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Map<String, Object> payload = Map.of(
+                "feedback_type", "image",
+                "category", "image_feedback",
+                "tag", "composition",
+                "point_name", "中庭",
+                "image_index", 0,
+                "prompt_template_version", "shopping_mall_atrium:1.0",
+                "rendered_prompt", "positive prompt text",
+                "generation_params", Map.of("theme", "圣诞节")
+        );
+
+        Feedback result = feedbackService.saveFeedback(projectId, payload, userId);
+
+        assertThat(result.getPromptTemplateVersion()).isEqualTo("shopping_mall_atrium:1.0");
+        assertThat(result.getRenderedPrompt()).isEqualTo("positive prompt text");
+        assertThat(result.getGenerationParams()).contains("圣诞节");
+    }
 }

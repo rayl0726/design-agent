@@ -51,6 +51,15 @@ public class Feedback {
     @Column(name = "image_url", length = 500)
     private String imageUrl;
 
+    @Column(name = "prompt_template_version", length = 100)
+    private String promptTemplateVersion;
+
+    @Column(name = "rendered_prompt", columnDefinition = "TEXT")
+    private String renderedPrompt;
+
+    @Column(name = "generation_params", columnDefinition = "JSON")
+    private String generationParams;
+
     // 风格/调性、构图/视角、内容、材质/灯光
     @Column(name = "tag", length = 50)
     private String tag;
@@ -140,6 +149,15 @@ public class Feedback {
 
     public String getImageUrl() { return imageUrl; }
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+
+    public String getPromptTemplateVersion() { return promptTemplateVersion; }
+    public void setPromptTemplateVersion(String promptTemplateVersion) { this.promptTemplateVersion = promptTemplateVersion; }
+
+    public String getRenderedPrompt() { return renderedPrompt; }
+    public void setRenderedPrompt(String renderedPrompt) { this.renderedPrompt = renderedPrompt; }
+
+    public String getGenerationParams() { return generationParams; }
+    public void setGenerationParams(String generationParams) { this.generationParams = generationParams; }
 
     public String getTag() { return tag; }
     public void setTag(String tag) { this.tag = tag; }

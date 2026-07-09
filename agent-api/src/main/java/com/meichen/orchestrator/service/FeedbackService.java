@@ -5,6 +5,8 @@ import com.meichen.orchestrator.entity.Project;
 import com.meichen.orchestrator.repository.FeedbackRepository;
 import com.meichen.orchestrator.repository.ProjectRepository;
 import com.meichen.orchestrator.util.PublicIdGenerator;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,11 +19,17 @@ public class FeedbackService {
     private final FeedbackRepository feedbackRepository;
     private final ProjectRepository projectRepository;
     private final PublicIdGenerator publicIdGenerator;
+    private final ObjectMapper objectMapper;
 
     public FeedbackService(FeedbackRepository feedbackRepository, ProjectRepository projectRepository, PublicIdGenerator publicIdGenerator) {
+        this(feedbackRepository, projectRepository, publicIdGenerator, new ObjectMapper());
+    }
+
+    public FeedbackService(FeedbackRepository feedbackRepository, ProjectRepository projectRepository, PublicIdGenerator publicIdGenerator, ObjectMapper objectMapper) {
         this.feedbackRepository = feedbackRepository;
         this.projectRepository = projectRepository;
         this.publicIdGenerator = publicIdGenerator;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional
@@ -51,9 +59,26 @@ public class FeedbackService {
             feedback = Feedback.create(
                 projectId, feedbackType, ideaIndex, pointName, imageIndex, imageUrl, tag, comment
             );
+            feedback.setPromptTemplateVersion((String) payload.get("prompt_template_version"));
+            feedback.setRenderedPrompt((String) payload.get("rendered_prompt"));
+            Object generationParams = payload.get("generation_params");
+            if (generationParams != null) {
+                feedback.setGenerationParams(serializeGenerationParams(generationParams));
+            }
         }
         feedback.setUserId(userId);
         return publicIdGenerator.assignAndSave(feedback, Feedback::setPublicId, feedbackRepository::save);
+    }
+
+    private String serializeGenerationParams(Object generationParams) {
+        if (generationParams instanceof String s) {
+            return s;
+        }
+        try {
+            return objectMapper.writeValueAsString(generationParams);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Invalid generation_params", e);
+        }
     }
 
     @Transactional(readOnly = true)
