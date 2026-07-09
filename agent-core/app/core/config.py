@@ -34,7 +34,7 @@ class Settings(BaseSettings):
 
     # 模型服务选择：zhipu | ollama
     vlm_provider: str = "zhipu"  # "zhipu" | "ollama"
-    embedding_provider: str = "zhipu"  # "zhipu" | "ollama"
+    embedding_provider: str = "ollama"  # "zhipu" | "ollama"
 
     milvus_host: str = "localhost"
     milvus_port: int = 19530
