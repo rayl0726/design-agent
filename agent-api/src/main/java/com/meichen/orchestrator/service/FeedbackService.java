@@ -29,18 +29,37 @@ public class FeedbackService {
         ensureProjectBelongsToUser(projectId, userId);
 
         String feedbackType = (String) payload.get("feedback_type");
-        Integer ideaIndex = payload.get("idea_index") instanceof Number n ? n.intValue() : null;
-        String pointName = (String) payload.get("point_name");
-        Integer imageIndex = payload.get("image_index") instanceof Number n ? n.intValue() : null;
-        String imageUrl = (String) payload.get("image_url");
-        String tag = (String) payload.get("tag");
-        String comment = (String) payload.get("comment");
 
-        Feedback feedback = Feedback.create(
-            projectId, feedbackType, ideaIndex, pointName, imageIndex, imageUrl, tag, comment
-        );
+        Feedback feedback;
+        if ("intent".equalsIgnoreCase(feedbackType)) {
+            feedback = Feedback.createIntentCorrection(
+                projectId,
+                (String) payload.get("intent_field"),
+                (String) payload.get("original_value"),
+                (String) payload.get("corrected_value"),
+                (String) payload.get("category"),
+                (String) payload.get("notes")
+            );
+        } else {
+            Integer ideaIndex = payload.get("idea_index") instanceof Number n ? n.intValue() : null;
+            String pointName = (String) payload.get("point_name");
+            Integer imageIndex = payload.get("image_index") instanceof Number n ? n.intValue() : null;
+            String imageUrl = (String) payload.get("image_url");
+            String tag = (String) payload.get("tag");
+            String comment = (String) payload.get("comment");
+
+            feedback = Feedback.create(
+                projectId, feedbackType, ideaIndex, pointName, imageIndex, imageUrl, tag, comment
+            );
+        }
         feedback.setUserId(userId);
         return publicIdGenerator.assignAndSave(feedback, Feedback::setPublicId, feedbackRepository::save);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Feedback> listUnprocessedIntentCorrections(String projectId, Long userId) {
+        ensureProjectBelongsToUser(projectId, userId);
+        return feedbackRepository.findByProjectIdAndFeedbackTypeAndProcessedFalseOrderByCreatedAtDesc(projectId, "intent");
     }
 
     @Transactional(readOnly = true)

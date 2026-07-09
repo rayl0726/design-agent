@@ -11,6 +11,8 @@ import java.util.Optional;
 public interface FeedbackRepository extends JpaRepository<Feedback, String> {
     List<Feedback> findByProjectIdAndUserIdOrderByCreatedAtDesc(String projectId, Long userId);
 
+    List<Feedback> findByProjectIdAndFeedbackTypeAndProcessedFalseOrderByCreatedAtDesc(String projectId, String feedbackType);
+
     Optional<Feedback> findByPublicId(String publicId);
 
     Optional<Feedback> findByPublicIdAndUserId(String publicId, Long userId);

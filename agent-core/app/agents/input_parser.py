@@ -152,14 +152,30 @@ class ReferenceParser:
 class TextParser:
     SYSTEM = "你是一位美陈设计需求分析师，擅长从自然语言中提取结构化设计需求。"
 
+    _intent_service = None
+
     async def parse(self, text: str) -> dict[str, Any]:
         from app.core.config import settings
 
         if getattr(settings, "intent_parser_legacy", False):
             return self._get_fallback_parse(text)
 
-        service = get_intent_service()
+        service = self._intent_service or get_intent_service()
         result = await service.recognize(text)
+
+        if result.clarification and result.clarification.needs_clarification:
+            return {
+                "source_type": "text",
+                "needs_clarification": True,
+                "clarification_question": result.clarification.clarification_question,
+                "missing_fields": result.clarification.missing_fields,
+                "low_confidence_fields": result.clarification.low_confidence_fields,
+                "_recognition_meta": {
+                    "space_type_source": result.space_type.source if result.space_type else None,
+                    "space_type_confidence": result.space_type.confidence if result.space_type else 0.0,
+                },
+            }
+
         data = {
             "theme": result.theme.value if result.theme else "",
             "style": result.style.value if result.style else "",
@@ -169,13 +185,13 @@ class TextParser:
             "target_audience": result.target_audience.value if result.target_audience else "",
             "timeline": result.timeline.value if result.timeline else "",
             "material_restrictions": [m.value for m in result.material_restrictions],
-            "special_requirements": [],
+            "special_requirements": [s.value for s in result.special_requirements],
             "color_preference": result.color_preference.value if result.color_preference else "",
             "brand_positioning": result.brand_positioning.value if result.brand_positioning else "",
             "design_system_preference": result.design_system_preference.value
             if result.design_system_preference
             else "",
-            "points": [p.value for p in result.points],
+            "points": [{"name": str(p.value), "count": 1, "notes": ""} for p in result.points],
             "source_type": "text",
             "_recognition_meta": {
                 "space_type_source": result.space_type.source if result.space_type else None,

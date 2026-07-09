@@ -19,7 +19,9 @@ class FieldSource(_FieldSourceBase):
     FUZZY = "fuzzy"
     SEMANTIC = "semantic"
     LLM = "llm"
+    VALIDATED = "validated"
     DEFAULT = "default"
+    CLARIFICATION = "clarification"
     UNKNOWN = "unknown"
 
 
@@ -56,6 +58,29 @@ class IntentRecognitionResult(BaseModel):
 
 
 class ClarificationRequest(BaseModel):
+    needs_clarification: bool = False
     missing_fields: list[str] = Field(default_factory=list)
     low_confidence_fields: list[str] = Field(default_factory=list)
+    clarification_question: str = ""
     message: str = ""
+
+
+class ValidatedIntent(BaseModel):
+    """经过校验后的意图结果，包含每个字段的来源和置信度。"""
+
+    space_type: RecognizedField | None = None
+    points: list[RecognizedField] = Field(default_factory=list)
+    theme: RecognizedField | None = None
+    budget: RecognizedField | None = None
+    budget_level: RecognizedField | None = None
+    style: RecognizedField | None = None
+    material_restrictions: list[RecognizedField] = Field(default_factory=list)
+    allowed_materials: list[RecognizedField] = Field(default_factory=list)
+    color_preference: RecognizedField | None = None
+    brand_positioning: RecognizedField | None = None
+    target_audience: RecognizedField | None = None
+    timeline: RecognizedField | None = None
+    design_system_preference: RecognizedField | None = None
+    special_requirements: list[RecognizedField] = Field(default_factory=list)
+    raw_text: str = ""
+    clarification: ClarificationRequest | None = None

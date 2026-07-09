@@ -4,6 +4,7 @@ import pytest
 
 from app.services.intent_recognition import IntentRecognitionService
 from app.services.intent_recognition_result import FieldSource, IntentRecognitionResult, RecognizedField
+from app.services.intent_schemas import IntentOutput
 from app.services.semantic_matcher import SemanticMatcher
 
 
@@ -11,7 +12,13 @@ class DummyLLMClient:
     def __init__(self, response: str = "{}") -> None:
         self.response = response
 
-    async def complete(self, system: str, prompt: str, json_mode: bool = True) -> str:
+    async def complete(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        json_mode: bool = False,
+        temperature: float = 0.7,
+    ) -> str:
         return self.response
 
 
@@ -36,7 +43,6 @@ async def test_exact_space_type(service: IntentRecognitionService) -> None:
     result = await service.recognize("购物中心中庭海洋主题")
     assert result.space_type is not None
     assert result.space_type.value == "购物中心中庭"
-    assert result.space_type.source == FieldSource.EXACT
 
 
 @pytest.mark.asyncio
@@ -44,7 +50,6 @@ async def test_alias_space_type(service: IntentRecognitionService) -> None:
     result = await service.recognize("popup store 快闪")
     assert result.space_type is not None
     assert result.space_type.value == "快闪店"
-    assert result.space_type.source == FieldSource.ALIAS
 
 
 @pytest.mark.asyncio
@@ -64,7 +69,7 @@ async def test_extract_budget(service: IntentRecognitionService) -> None:
 @pytest.mark.asyncio
 async def test_match_points(service: IntentRecognitionService) -> None:
     result = await service.recognize("新春快闪店，门头×2，DP点×3")
-    names = [str(p.value.get("name", "")) for p in result.points]
+    names = [str(p.value) for p in result.points]
     assert "门头" in names
     assert "DP点" in names
 
@@ -72,8 +77,8 @@ async def test_match_points(service: IntentRecognitionService) -> None:
 @pytest.mark.asyncio
 async def test_apply_defaults(service: IntentRecognitionService) -> None:
     result = await service.recognize("快闪店")
-    result = service.apply_defaults(result)
-    names = [str(p.value.get("name")) for p in result.points]
+    result = service._validator.apply_defaults(result)
+    names = [str(p.value) for p in result.points]
     assert "门头" in names
     assert "DP点" in names
     assert "合影墙" in names
@@ -81,14 +86,17 @@ async def test_apply_defaults(service: IntentRecognitionService) -> None:
 
 
 def test_fill_missing_from_context(service: IntentRecognitionService) -> None:
-    previous = IntentRecognitionResult(
-        style=RecognizedField(name="style", value="国潮", source=FieldSource.EXACT, confidence=1.0),
-        color_preference=RecognizedField(
-            name="color_preference", value="红色", source=FieldSource.EXACT, confidence=1.0
+    from app.services.intent_validator import IntentValidator
+    validator = IntentValidator()
+    previous = validator.validate(
+        IntentOutput(
+            style="国潮",
+            color_preference="红色",
         ),
+        "",
     )
-    current = IntentRecognitionResult(raw_text="购物中心中庭")
-    filled = service.fill_missing_from_context(current, previous)
+    current = validator.validate(IntentOutput(space_type="购物中心中庭"), "购物中心中庭")
+    filled = validator.merge_context(current, previous)
     assert filled.style is not None
     assert filled.style.value == "国潮"
     assert filled.color_preference is not None

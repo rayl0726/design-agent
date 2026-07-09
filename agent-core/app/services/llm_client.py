@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from abc import ABC, abstractmethod
 from typing import AsyncIterator
@@ -140,26 +141,48 @@ class ZhipuProvider(LLMProvider):
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
 
-        try:
-            resp = await self.client.post(
-                f"{self.base_url}/chat/completions",
-                json=payload,
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                timeout=180.0,
-            )
-            print(f"DEBUG: Zhipu response status: {resp.status_code}")
-            resp.raise_for_status()
-            data = resp.json()
-            return data.get("choices", [{}])[0].get("message", {}).get("content", "")
-        except httpx.HTTPStatusError as e:
-            print(f"Zhipu HTTP error: {e.response.status_code} - {e.response.text[:300]}")
-            raise
-        except httpx.TimeoutException as e:
-            print(f"Zhipu timeout: {e}")
-            raise
-        except Exception as e:
-            print(f"Zhipu call failed: {type(e).__name__}: {e}")
-            raise
+        max_retries = 3
+        backoff_factor = 1.0
+        last_exception: Exception | None = None
+
+        for attempt in range(max_retries + 1):
+            try:
+                resp = await self.client.post(
+                    f"{self.base_url}/chat/completions",
+                    json=payload,
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    timeout=180.0,
+                )
+                print(f"DEBUG: Zhipu response status: {resp.status_code}")
+                resp.raise_for_status()
+                data = resp.json()
+                return data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            except httpx.HTTPStatusError as e:
+                last_exception = e
+                status_code = e.response.status_code
+                print(f"Zhipu HTTP error: {status_code} - {e.response.text[:300]}")
+                if status_code == 429 and attempt < max_retries:
+                    wait = backoff_factor * (2 ** attempt)
+                    print(f"Zhipu rate limited; retrying in {wait}s (attempt {attempt + 1}/{max_retries})")
+                    await asyncio.sleep(wait)
+                    continue
+                raise
+            except httpx.TimeoutException as e:
+                last_exception = e
+                print(f"Zhipu timeout: {e}")
+                if attempt < max_retries:
+                    wait = backoff_factor * (2 ** attempt)
+                    print(f"Zhipu timeout; retrying in {wait}s (attempt {attempt + 1}/{max_retries})")
+                    await asyncio.sleep(wait)
+                    continue
+                raise
+            except Exception as e:
+                print(f"Zhipu call failed: {type(e).__name__}: {e}")
+                raise
+
+        if last_exception:
+            raise last_exception
+        return ""
 
     async def stream(
         self,

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from app.services.intent_recognition import IntentRecognitionService
-from app.services.intent_recognition_result import IntentRecognitionResult
+from app.services.intent_recognition_result import ValidatedIntent
 
 GOLDEN_CASES_PATH = Path(__file__).parent / "golden_cases.jsonl"
 
@@ -43,7 +43,7 @@ async def evaluate(service: IntentRecognitionService | None = None) -> dict[str,
     }
 
 
-def _check_case(case: dict[str, Any], result: IntentRecognitionResult) -> tuple[bool, dict[str, Any]]:
+def _check_case(case: dict[str, Any], result: ValidatedIntent) -> tuple[bool, dict[str, Any]]:
     expected = case["expected"]
     details: dict[str, Any] = {}
     all_ok = True
@@ -73,9 +73,9 @@ def _check_case(case: dict[str, Any], result: IntentRecognitionResult) -> tuple[
             all_ok = False
 
     if "points" in expected:
-        got = sorted([p.value for p in result.points], key=lambda x: x.get("name", ""))
+        got = sorted([str(p.value) for p in result.points])
         details["points"] = got
-        expected_sorted = sorted(expected["points"], key=lambda x: x.get("name", ""))
+        expected_sorted = sorted([p["name"] for p in expected["points"]])
         if got != expected_sorted:
             all_ok = False
 

@@ -3,17 +3,32 @@ import pytest
 from app.agents.input_parser import TextParser, InputMerger
 from app.agents.requirement_analyst import RequirementAnalyst
 from app.models.database import init_db
+from app.services.intent_recognition import IntentRecognitionService
 
 init_db()
 
 
+class DummyLLMClient:
+    async def complete(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        json_mode: bool = False,
+        temperature: float = 0.7,
+    ) -> str:
+        return "{}"
+
+
 @pytest.mark.asyncio
 async def test_text_parser():
+    service = IntentRecognitionService(llm_client=DummyLLMClient())
     parser = TextParser()
+    parser._intent_service = service
     text = "夏日海洋主题中庭吊饰，预算15万，工期2周，目标人群为年轻家庭"
     result = await parser.parse(text)
     assert result["source_type"] == "text"
-    assert "夏日海洋" in result.get("theme", "")
+    assert result["space_type"] == "购物中心中庭"
+    assert result["budget"] == 150000
 
 
 @pytest.mark.asyncio

@@ -8,7 +8,13 @@ from tests.intent.evaluator import evaluate
 
 
 class DummyLLMClient:
-    async def complete(self, system: str, prompt: str, json_mode: bool = True) -> str:
+    async def complete(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        json_mode: bool = False,
+        temperature: float = 0.7,
+    ) -> str:
         return "{}"
 
 

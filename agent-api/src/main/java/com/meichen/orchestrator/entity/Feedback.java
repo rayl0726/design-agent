@@ -17,9 +17,27 @@ public class Feedback {
     @Column(name = "project_id", nullable = false, length = 36)
     private String projectId;
 
-    // idea / image
+    // idea / image / intent
     @Column(name = "feedback_type", nullable = false, length = 20)
     private String feedbackType;
+
+    @Column(name = "category", length = 30)
+    private String category;
+
+    @Column(name = "intent_field", length = 50)
+    private String intentField;
+
+    @Column(name = "original_value", columnDefinition = "TEXT")
+    private String originalValue;
+
+    @Column(name = "corrected_value", columnDefinition = "TEXT")
+    private String correctedValue;
+
+    @Column(name = "processed")
+    private Boolean processed = false;
+
+    @Column(name = "notes", columnDefinition = "TEXT")
+    private String notes;
 
     @Column(name = "idea_index")
     private Integer ideaIndex;
@@ -68,6 +86,22 @@ public class Feedback {
         return f;
     }
 
+    public static Feedback createIntentCorrection(String projectId, String intentField,
+                                                  String originalValue, String correctedValue,
+                                                  String category, String notes) {
+        Feedback f = new Feedback();
+        f.setId(UUID.randomUUID().toString());
+        f.setProjectId(projectId);
+        f.setFeedbackType("intent");
+        f.setIntentField(intentField);
+        f.setOriginalValue(originalValue);
+        f.setCorrectedValue(correctedValue);
+        f.setCategory(category);
+        f.setNotes(notes);
+        f.setProcessed(false);
+        return f;
+    }
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
 
@@ -76,6 +110,24 @@ public class Feedback {
 
     public String getFeedbackType() { return feedbackType; }
     public void setFeedbackType(String feedbackType) { this.feedbackType = feedbackType; }
+
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
+
+    public String getIntentField() { return intentField; }
+    public void setIntentField(String intentField) { this.intentField = intentField; }
+
+    public String getOriginalValue() { return originalValue; }
+    public void setOriginalValue(String originalValue) { this.originalValue = originalValue; }
+
+    public String getCorrectedValue() { return correctedValue; }
+    public void setCorrectedValue(String correctedValue) { this.correctedValue = correctedValue; }
+
+    public Boolean getProcessed() { return processed; }
+    public void setProcessed(Boolean processed) { this.processed = processed; }
+
+    public String getNotes() { return notes; }
+    public void setNotes(String notes) { this.notes = notes; }
 
     public Integer getIdeaIndex() { return ideaIndex; }
     public void setIdeaIndex(Integer ideaIndex) { this.ideaIndex = ideaIndex; }

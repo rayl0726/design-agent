@@ -75,6 +75,26 @@ public class DialogueService {
             log.info("text_parse result: {}", textParse);
             pushThinking(projectId, "text_parse", "completed");
 
+            // 1.5 意图不完整时直接发起澄清
+            Object needsClarificationObj = textParse.get("needs_clarification");
+            Boolean needsClarification = needsClarificationObj instanceof Boolean
+                ? (Boolean) needsClarificationObj
+                : Boolean.valueOf(String.valueOf(needsClarificationObj));
+            if (Boolean.TRUE.equals(needsClarification)) {
+                String clarificationQuestion = textParse.get("clarification_question") != null
+                    ? String.valueOf(textParse.get("clarification_question"))
+                    : "能否补充一下上述信息？";
+                log.info("Intent needs clarification for project {}: {}", projectId, clarificationQuestion);
+                SessionMessage msg = sessionMessageService.addAssistantMessage(projectId, "text", clarificationQuestion, project.getUserId());
+                pushMessage(projectId, msg);
+                Map<String, Object> initStatus = new HashMap<>();
+                initStatus.put("project_id", projectId);
+                initStatus.put("status", "INIT");
+                initStatus.put("current_level", project.getCurrentLevel() != null ? project.getCurrentLevel() : "");
+                sseEmitterService.sendToProject(projectId, "status", initStatus);
+                return;
+            }
+
             // 2. 与历史需求合并
             Map<String, Object> existingRequirement = parseJson(project.getRequirementJson());
             Map<String, Object> merged = mergeRequirements(existingRequirement, textParse);

@@ -21,7 +21,7 @@ points:
   - name: "门头"
     aliases: ["店招", "入口门头"]
   - name: "DP点"
-    aliases: ["dp点", "display point"]
+    aliases: ["dp点", "display point", "打卡点"]
   - name: "合影墙"
     aliases: ["打卡墙", "photo wall"]
   - name: "灯光画"

@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-import contextlib
-import json
 import re
 from typing import Protocol
 
 import jieba  # type: ignore[import-untyped]
 from rapidfuzz import fuzz
 
+from app.services.intent_llm_extractor import IntentLLMExtractor
 from app.services.intent_recognition_result import (
     FieldSource,
     IntentRecognitionResult,
     RecognizedField,
+    ValidatedIntent,
 )
+from app.services.intent_schemas import IntentOutput
+from app.services.intent_validator import IntentValidator
 from app.services.llm_client import llm_client as _default_llm_client
 from app.services.semantic_matcher import SemanticMatcher
 from app.services.taxonomy_loader import Taxonomy, load_taxonomy
@@ -23,22 +25,22 @@ SEMANTIC_THRESHOLD = 0.82
 
 
 class LLMClient(Protocol):
-    async def complete(self, system: str, prompt: str, json_mode: bool = True) -> str:
+    async def complete(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        json_mode: bool = False,
+        temperature: float = 0.7,
+    ) -> str:
         ...
 
 
-class IntentRecognitionService:
-    def __init__(
-        self,
-        taxonomy: Taxonomy | None = None,
-        llm_client: LLMClient | None = None,
-        semantic_matcher: SemanticMatcher | None = None,
-    ):
-        self.taxonomy = taxonomy or load_taxonomy()
-        self._llm_client = llm_client or _default_llm_client
-        self._semantic_matcher = semantic_matcher or SemanticMatcher(
-            self.taxonomy, threshold=SEMANTIC_THRESHOLD
-        )
+class _RuleBasedExtractor:
+    """规则提取器，作为 LLM 失败时的降级方案。"""
+
+    def __init__(self, taxonomy: Taxonomy):
+        self.taxonomy = taxonomy
+        self._semantic_matcher = SemanticMatcher(taxonomy, threshold=SEMANTIC_THRESHOLD)
         self._load_jieba_dict()
 
     def _load_jieba_dict(self) -> None:
@@ -55,59 +57,118 @@ class IntentRecognitionService:
         for term in set(terms):
             jieba.add_word(term, freq=1000)
 
-    async def recognize(self, text: str) -> IntentRecognitionResult:
+    async def extract(self, text: str) -> IntentOutput:
         tokens = [t for t in jieba.lcut(text) if t.strip()]
-        result = IntentRecognitionResult(raw_text=text)
+        output = IntentOutput()
 
-        result.space_type = await self._match_field(
-            tokens, "space_type", self.taxonomy.space_type_names, self.taxonomy.alias_to_space_type
+        space_type = await self._match_field(
+            tokens, self.taxonomy.space_type_names, self.taxonomy.alias_to_space_type
         )
-        result.points = self._match_points(tokens, text)
-        result.budget = self._extract_budget(text)
-        result.budget_level = self._extract_budget_level(text, result.budget)
-        result.style = await self._match_field(
-            tokens, "style", self.taxonomy.style_names, self.taxonomy.alias_to_style
-        )
-        result.material_restrictions = await self._match_multi(
-            tokens, "material", self.taxonomy.material_names, self.taxonomy.alias_to_material
-        )
-        result.theme = self._extract_regex_field(text, r"(?:主题|概念|theme)\s*[：:]\s*([^\n，。]+)")
-        result.timeline = self._extract_regex_field(text, r"(?:工期|时间|timeline)\s*[：:]\s*([^\n，。]+)")
-        result.color_preference = self._extract_regex_field(text, r"(?:颜色|色彩|color)\s*[：:]\s*([^\n，。]+)")
+        output.space_type = space_type
 
-        result = await self._llm_fallback(result, text)
-        return result
+        output.points = self._match_points(tokens)
+
+        budget_field = self._extract_budget(text)
+        if budget_field:
+            output.budget = str(budget_field.value)
+
+        style = await self._match_field(
+            tokens, self.taxonomy.style_names, self.taxonomy.alias_to_style
+        )
+        output.style = style
+
+        materials = await self._match_multi(
+            tokens, self.taxonomy.material_names, self.taxonomy.alias_to_material
+        )
+        output.material_restrictions = materials
+
+        restrictions = self._extract_material_restrictions(text)
+        if restrictions:
+            output.material_restrictions.extend(restrictions)
+
+        allowed = self._extract_allowed_materials(text)
+        if allowed:
+            output.allowed_materials = allowed
+
+        theme_field = self._extract_theme(text)
+        if theme_field:
+            output.theme = str(theme_field.value)
+
+        timeline_field = self._extract_regex_field(text, r"(?:工期|时间|timeline)\s*(?:为|是|：|:)?\s*([^\n，。]+)")
+        if timeline_field:
+            output.timeline = str(timeline_field.value)
+
+        color_field = self._extract_regex_field(text, r"(?:颜色|色彩|color)\s*(?:为|是|：|:)?\s*([^\n，。]+)")
+        if color_field:
+            output.color_preference = str(color_field.value)
+
+        return output
+
+    def _extract_material_restrictions(self, text: str) -> list[str]:
+        """识别 '不要真植物'、'禁用亚克力' 等否定材质表达。"""
+        results: list[str] = []
+        # 不要/不用/禁用/避免 + 材质词
+        stop_chars = "，。；;"
+        patterns = [
+            rf"(?:不要|不用|禁用|避免|不想用|别用)\s*([^{stop_chars}]+)",
+            rf"(?:排除|去除|不要出现)\s*([^{stop_chars}]+)",
+        ]
+        for pattern in patterns:
+            for match in re.finditer(pattern, text):
+                fragment = match.group(1).strip()
+                terms = self._extract_material_terms(fragment)
+                if terms:
+                    results.extend(terms)
+                else:
+                    # 保留原始否定对象，即使不在 taxonomy 中
+                    results.append(fragment)
+        return results
+
+    def _extract_allowed_materials(self, text: str) -> list[str]:
+        """识别 '亚克力可以'、'可用金属' 等肯定材质表达。"""
+        results: list[str] = []
+        stop_chars = "，。；;"
+        patterns = [
+            rf"([^{stop_chars}]+?)\s*(?:可以|可用|能用|允许使用)",
+            rf"(?:可用|能用|允许使用)\s*([^{stop_chars}]+)",
+        ]
+        for pattern in patterns:
+            for match in re.finditer(pattern, text):
+                fragment = match.group(1).strip()
+                results.extend(self._extract_material_terms(fragment))
+        return results
+
+    def _extract_material_terms(self, text: str) -> list[str]:
+        """从片段中提取已知的材质词。"""
+        terms: list[str] = []
+        all_targets: dict[str, str] = {}
+        for name in self.taxonomy.material_names:
+            all_targets[name] = name
+        for alias, standard in self.taxonomy.alias_to_material.items():
+            all_targets[alias] = standard
+
+        lowered = text.lower()
+        for target, standard in all_targets.items():
+            if target in lowered and standard not in terms:
+                terms.append(standard)
+        return terms
 
     async def _match_field(
         self,
         tokens: list[str],
-        field_type: str,
         exact_names: set[str],
         alias_map: dict[str, str],
-    ) -> RecognizedField | None:
+    ) -> str | None:
         for token in tokens:
             if token in exact_names:
-                return RecognizedField(
-                    name=field_type,
-                    value=token,
-                    source=FieldSource.EXACT,
-                    confidence=1.0,
-                    raw_text=token,
-                )
+                return token
 
         for token in tokens:
             key = token.lower()
             if key in alias_map:
-                standard = alias_map[key]
-                return RecognizedField(
-                    name=field_type,
-                    value=standard,
-                    source=FieldSource.ALIAS,
-                    confidence=0.95,
-                    raw_text=token,
-                )
+                return alias_map[key]
 
-        best: tuple[str, float] | None = None
+        # 子串匹配：处理 "中庭吊饰" 包含 "中庭" 别名的情况
         all_targets: dict[str, str] = {}
         for name in exact_names:
             all_targets[name] = name
@@ -115,115 +176,86 @@ class IntentRecognitionService:
             all_targets[alias] = standard
 
         for token in tokens:
+            token_lower = token.lower()
+            for target, standard in all_targets.items():
+                if len(target) >= 2 and target in token_lower:
+                    return standard
+
+        best: tuple[str, float] | None = None
+        for token in tokens:
             for target, standard in all_targets.items():
                 score = fuzz.ratio(token, target) / 100.0
                 if score >= FUZZY_THRESHOLD and (best is None or score > best[1]):
                     best = (standard, score)
 
         if best and best[1] >= FUZZY_THRESHOLD_CRITICAL:
-            return RecognizedField(
-                name=field_type,
-                value=best[0],
-                source=FieldSource.FUZZY,
-                confidence=round(best[1], 2),
-                raw_text=" ".join(tokens),
-            )
+            return best[0]
 
-        semantic_name, score = await self._semantic_matcher.match(" ".join(tokens), field_type)
-        if semantic_name:
-            return RecognizedField(
-                name=field_type,
-                value=semantic_name,
-                source=FieldSource.SEMANTIC,
-                confidence=round(score, 2),
-                raw_text=" ".join(tokens),
-            )
+        semantic_name, _ = await self._semantic_matcher.match(" ".join(tokens), "space_type")
+        return semantic_name
 
-        return None
-
-    def _match_points(self, tokens: list[str], text: str) -> list[RecognizedField]:
-        found: list[RecognizedField] = []
+    def _match_points(self, tokens: list[str]) -> list[str]:
+        found: list[str] = []
         seen: set[str] = set()
+        all_point_targets: dict[str, str] = {}
+        for name in self.taxonomy.point_names:
+            all_point_targets[name] = name
+        for alias, standard in self.taxonomy.alias_to_point.items():
+            all_point_targets[alias] = standard
 
         for token in tokens:
+            token_lower = token.lower()
             if token in self.taxonomy.point_names and token not in seen:
-                found.append(
-                    RecognizedField(
-                        name="point",
-                        value=token,
-                        source=FieldSource.EXACT,
-                        confidence=1.0,
-                        raw_text=token,
-                    )
-                )
+                found.append(token)
                 seen.add(token)
                 continue
-            key = token.lower()
-            if key in self.taxonomy.alias_to_point:
-                standard = self.taxonomy.alias_to_point[key]
+            if token_lower in self.taxonomy.alias_to_point:
+                standard = self.taxonomy.alias_to_point[token_lower]
                 if standard not in seen:
-                    found.append(
-                        RecognizedField(
-                            name="point",
-                            value=standard,
-                            source=FieldSource.ALIAS,
-                            confidence=0.95,
-                            raw_text=token,
-                        )
-                    )
+                    found.append(standard)
                     seen.add(standard)
-
-        for field in found:
-            name = str(field.value)
-            pattern = re.search(rf"{re.escape(name)}\s*[×xX*]\s*(\d+)", text)
-            if pattern:
-                field.value = {"name": name, "count": int(pattern.group(1))}
-            else:
-                field.value = {"name": name, "count": 1}
+                continue
+            # 子串匹配
+            for target, standard in all_point_targets.items():
+                if len(target) >= 2 and target in token_lower and standard not in seen:
+                    found.append(standard)
+                    seen.add(standard)
+                    break
         return found
 
     def _extract_budget(self, text: str) -> RecognizedField | None:
-        match = re.search(r"(\d+(?:\.\d+)?)\s*(万|元|千)", text)
+        # 支持范围表达：20万-30万、二十万到三十万、20万~30万
+        range_pattern = r"([零一二两三四五六七八九十百千万亿\d]+(?:\.\d+)?)\s*[~\-到至]\s*([零一二两三四五六七八九十百千万亿\d]+(?:\.\d+)?)\s*[万w千k元]?"
+        match = re.search(range_pattern, text)
         if match:
-            amount = float(match.group(1))
-            unit = match.group(2)
-            if unit == "万":
-                amount *= 10000
-            elif unit == "千":
-                amount *= 1000
             return RecognizedField(
                 name="budget",
-                value=int(amount),
+                value=match.group(0).strip(),
                 source=FieldSource.EXACT,
                 confidence=1.0,
                 raw_text=match.group(0),
             )
-        return None
 
-    def _extract_budget_level(self, text: str, budget: RecognizedField | None) -> RecognizedField | None:
-        for alias, standard in self.taxonomy.alias_to_budget_level.items():
-            if alias in text.lower() and len(alias) > 1:
-                return RecognizedField(
-                    name="budget_level",
-                    value=standard,
-                    source=FieldSource.ALIAS,
-                    confidence=0.9,
-                    raw_text=alias,
-                )
-        if budget and isinstance(budget.value, int):
-            amount = budget.value
-            if amount < 100000:
-                level = "low"
-            elif amount > 300000:
-                level = "high"
-            else:
-                level = "medium"
+        # 支持单个数字+单位：30万、300k、5千
+        match = re.search(r"(\d+(?:\.\d+)?)\s*(万|w|千|k|元)", text, re.IGNORECASE)
+        if match:
             return RecognizedField(
-                name="budget_level",
-                value=level,
-                source=FieldSource.DEFAULT,
-                confidence=0.8,
-                raw_text=str(amount),
+                name="budget",
+                value=match.group(0).strip(),
+                source=FieldSource.EXACT,
+                confidence=1.0,
+                raw_text=match.group(0),
+            )
+
+        # 支持中文数字+单位：三十万、五千
+        match = re.search(r"([零一二两三四五六七八九十百千万亿]+)\s*[万w千k元]?", text)
+        if match:
+            return RecognizedField(
+                name="budget",
+                value=match.group(0).strip(),
+                source=FieldSource.EXACT,
+                confidence=1.0,
+                raw_text=match.group(0),
             )
         return None
 
@@ -239,92 +271,90 @@ class IntentRecognitionService:
             )
         return None
 
+    def _extract_theme(self, text: str) -> RecognizedField | None:
+        # 优先支持 "X主题" 格式
+        match = re.search(r"([^\n，。]+?)(?:主题|概念|theme)", text)
+        if match:
+            return RecognizedField(
+                name="theme",
+                value=match.group(1).strip(),
+                source=FieldSource.EXACT,
+                confidence=1.0,
+                raw_text=match.group(0),
+            )
+        # 其次支持 "主题为X"、"主题：X" 格式
+        match = re.search(r"(?:主题|概念|theme)\s*(?:为|是|：|:)\s*([^\n，。]+)", text)
+        if match:
+            return RecognizedField(
+                name="theme",
+                value=match.group(1).strip(),
+                source=FieldSource.EXACT,
+                confidence=1.0,
+                raw_text=match.group(0),
+            )
+        return None
+
     async def _match_multi(
         self,
         tokens: list[str],
-        field_type: str,
         exact_names: set[str],
         alias_map: dict[str, str],
-    ) -> list[RecognizedField]:
-        results: list[RecognizedField] = []
+    ) -> list[str]:
+        results: list[str] = []
         seen: set[str] = set()
         for token in tokens:
             if token in exact_names and token not in seen:
-                results.append(
-                    RecognizedField(
-                        name=field_type,
-                        value=token,
-                        source=FieldSource.EXACT,
-                        confidence=1.0,
-                        raw_text=token,
-                    )
-                )
+                results.append(token)
                 seen.add(token)
             key = token.lower()
             if key in alias_map:
                 standard = alias_map[key]
                 if standard not in seen:
-                    results.append(
-                        RecognizedField(
-                            name=field_type,
-                            value=standard,
-                            source=FieldSource.ALIAS,
-                            confidence=0.95,
-                            raw_text=token,
-                        )
-                    )
+                    results.append(standard)
                     seen.add(standard)
         return results
 
-    async def _llm_fallback(self, result: IntentRecognitionResult, text: str) -> IntentRecognitionResult:
-        missing_fields: dict[str, list[str]] = {}
-        if result.space_type is None:
-            missing_fields["space_type"] = ["空间类型"] + [
-                s["name"] for s in self.taxonomy.space_types[:10]
-            ]
-        if result.budget is None:
-            missing_fields["budget"] = ["预算金额，如 150000"]
 
-        if not missing_fields:
-            return result
+class IntentRecognitionService:
+    """LLM 结构化输出优先的意图识别服务。"""
 
-        system = "你是一位美陈设计需求解析助手。请仅从候选值中选择，不要编造。"
-        prompt = (
-            f"用户输入：{text}\n"
-            "请从以下候选值中补充缺失字段，输出 JSON 不要多余文字。\n"
-            "如果无法确定，保持 null。\n"
-            f"{json.dumps(missing_fields, ensure_ascii=False, indent=2)}\n"
-            '输出格式：{"space_type": "购物中心中庭", "budget": 150000}'
+    def __init__(
+        self,
+        taxonomy: Taxonomy | None = None,
+        llm_client: LLMClient | None = None,
+        semantic_matcher: SemanticMatcher | None = None,
+    ):
+        self.taxonomy = taxonomy or load_taxonomy()
+        self._llm_client = llm_client or _default_llm_client
+        self._semantic_matcher = semantic_matcher or SemanticMatcher(
+            self.taxonomy, threshold=SEMANTIC_THRESHOLD
         )
-        raw = await self._llm_client.complete(system, prompt, json_mode=True)
-        try:
-            data = json.loads(raw or "{}")
-        except json.JSONDecodeError:
-            return result
+        self._llm_extractor = IntentLLMExtractor(self.taxonomy, self._llm_client)
+        self._rule_extractor = _RuleBasedExtractor(self.taxonomy)
+        self._validator = IntentValidator(self.taxonomy)
 
-        if result.space_type is None and data.get("space_type"):
-            value = data["space_type"]
-            if value in self.taxonomy.space_type_names:
-                result.space_type = RecognizedField(
-                    name="space_type",
-                    value=value,
-                    source=FieldSource.LLM,
-                    confidence=0.7,
-                    raw_text=text,
-                )
+    async def recognize(
+        self,
+        text: str,
+        previous_intent: ValidatedIntent | None = None,
+    ) -> ValidatedIntent:
+        # 1. LLM 结构化输出优先
+        llm_output = await self._llm_extractor.extract(text)
 
-        if result.budget is None and data.get("budget"):
-            value = data["budget"]
-            with contextlib.suppress(ValueError, TypeError):
-                result.budget = RecognizedField(
-                    name="budget",
-                    value=int(value),
-                    source=FieldSource.LLM,
-                    confidence=0.7,
-                    raw_text=text,
-                )
+        # 2. LLM 失败时使用规则 fallback
+        if llm_output is None:
+            llm_output = await self._rule_extractor.extract(text)
 
-        return result
+        # 3. 后校验
+        validated = self._validator.validate(llm_output, text)
+
+        # 4. 上下文继承
+        validated = self._validator.merge_context(validated, previous_intent)
+
+        # 5. 应用默认值
+        validated = self._validator.apply_defaults(validated)
+
+        return validated
 
     def fill_missing_from_context(
         self,

@@ -35,4 +35,12 @@ public class FeedbackController {
     ) {
         return ResponseEntity.ok(feedbackService.listByProject(projectId, userId));
     }
+
+    @GetMapping("/intent-corrections/unprocessed")
+    public ResponseEntity<List<Feedback>> listUnprocessedIntentCorrections(
+        @PathVariable("projectId") String projectId,
+        @CurrentUser Long userId
+    ) {
+        return ResponseEntity.ok(feedbackService.listUnprocessedIntentCorrections(projectId, userId));
+    }
 }
