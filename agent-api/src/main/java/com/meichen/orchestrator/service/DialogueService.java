@@ -1,5 +1,6 @@
 package com.meichen.orchestrator.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.meichen.orchestrator.entity.Project;
 import com.meichen.orchestrator.entity.SessionMessage;
@@ -321,7 +322,7 @@ public class DialogueService {
     private Map<String, Object> parseJson(String json) {
         try {
             if (json == null || json.isEmpty()) return new HashMap<>();
-            return objectMapper.readValue(json, Map.class);
+            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
         } catch (Exception e) {
             return new HashMap<>();
         }
@@ -390,7 +391,7 @@ public class DialogueService {
             .block();
 
         try {
-            return objectMapper.readValue(response, Map.class);
+            return objectMapper.readValue(response, new TypeReference<Map<String, Object>>() {});
         } catch (Exception e) {
             log.error("Failed to parse agent response from {}: {}", uri, e.getMessage());
             return new HashMap<>();

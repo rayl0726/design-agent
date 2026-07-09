@@ -238,6 +238,7 @@ public class WorkflowEngine {
         return result;
     }
 
+    @SuppressWarnings("unchecked")
     private Map<String, Object> buildPayload(WorkflowNode node, Map<String, Object> outputs) {
         Map<String, Object> payload;
         List<String> deps = node.dependencies();

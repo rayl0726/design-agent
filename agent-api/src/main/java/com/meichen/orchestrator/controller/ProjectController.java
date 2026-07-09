@@ -12,6 +12,7 @@ import com.meichen.orchestrator.security.CurrentUser;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.*;
@@ -206,7 +207,7 @@ public class ProjectController {
 
         Map<String, Object> inputs;
         try {
-            inputs = objectMapper.readValue(project.getRawInputsJson(), Map.class);
+            inputs = objectMapper.readValue(project.getRawInputsJson(), new TypeReference<Map<String, Object>>() {});
         } catch (Exception e) {
             inputs = new HashMap<>();
         }

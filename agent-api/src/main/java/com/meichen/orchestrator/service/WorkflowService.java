@@ -283,6 +283,7 @@ public class WorkflowService {
     }
 
     @Transactional
+    @SuppressWarnings("unchecked")
     public void updateProjectStatus(String projectId, Map<String, Object> result, String targetLevel, String stopNode, Long userId) {
         try {
             Project project = projectRepository.findByIdAndUserId(projectId, userId).orElse(null);
@@ -389,7 +390,7 @@ public class WorkflowService {
                 log.info("Received response for level {}: {}", level, response);
                 
                 Map<String, Object> responseBody = new com.fasterxml.jackson.databind.ObjectMapper()
-                    .readValue(response, HashMap.class);
+                    .readValue(response, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
                 
                 String htmlPath = (String) responseBody.get("html");
                 log.info("HTML path for level {}: {}", level, htmlPath);
