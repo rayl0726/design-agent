@@ -1,0 +1,29 @@
+categories:
+  generic:
+    - blurry
+    - low quality
+    - distorted
+    - text
+    - watermark
+    - frame
+    - border
+  atrium:
+    - cluttered background
+    - people
+    - cars
+    - street view
+    - busy shoppers
+    - distracting signs
+    - uneven lighting
+  pop_up_store:
+    - cluttered background
+    - people
+    - cars
+    - street view
+    - distracting signs
+
+space_type_mapping:
+  "购物中心中庭": ["generic", "atrium"]
+  "商场中庭": ["generic", "atrium"]
+  "快闪店": ["generic", "pop_up_store"]
+  "_default": ["generic"]
