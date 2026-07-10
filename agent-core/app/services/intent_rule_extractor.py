@@ -108,6 +108,8 @@ class IntentRuleExtractor:
         return None
 
     def _extract_points(self, text: str, _tokens: list[str]) -> list[str]:
+        # _tokens is intentionally unused: point extraction uses substring matching over the full text
+        # rather than token-level matching, so tokens are not required.
         found: list[str] = []
         seen: set[str] = set()
         all_point_targets: dict[str, str] = {}
@@ -134,12 +136,18 @@ class IntentRuleExtractor:
 
         # 裸词启发式：输入较短、且未命中 space_type/point/style/material/budget 的名词
         if len(text) <= 8 and len(tokens) <= 3:
+            budget_match = self._extract_budget(text)
             for token in tokens:
-                if len(token) >= 2 and not self._is_known_non_theme(token):
+                if len(token) >= 2 and not self._is_known_non_theme(token, budget_match):
                     return token
         return None
 
-    def _is_known_non_theme(self, token: str) -> bool:
+    def _is_known_non_theme(self, token: str, budget_match: str | None = None) -> bool:
+        # 纯数字或 budget 已匹配到的子串不应被视为 theme
+        if token.isdigit():
+            return True
+        if budget_match and token in budget_match:
+            return True
         lowered = token.lower()
         if token in self.taxonomy.space_type_names:
             return True
