@@ -162,20 +162,9 @@ class TextParser:
 
         service = self._intent_service or get_intent_service()
         result = await service.recognize(text)
+        return self._validated_intent_to_dict(result)
 
-        if result.clarification and result.clarification.needs_clarification:
-            return {
-                "source_type": "text",
-                "needs_clarification": True,
-                "clarification_question": result.clarification.clarification_question,
-                "missing_fields": result.clarification.missing_fields,
-                "low_confidence_fields": result.clarification.low_confidence_fields,
-                "_recognition_meta": {
-                    "space_type_source": result.space_type.source if result.space_type else None,
-                    "space_type_confidence": result.space_type.confidence if result.space_type else 0.0,
-                },
-            }
-
+    def _validated_intent_to_dict(self, result) -> dict[str, Any]:
         data = {
             "theme": result.theme.value if result.theme else "",
             "style": result.style.value if result.style else "",
@@ -185,6 +174,7 @@ class TextParser:
             "target_audience": result.target_audience.value if result.target_audience else "",
             "timeline": result.timeline.value if result.timeline else "",
             "material_restrictions": [m.value for m in result.material_restrictions],
+            "allowed_materials": [m.value for m in result.allowed_materials],
             "special_requirements": [s.value for s in result.special_requirements],
             "color_preference": result.color_preference.value if result.color_preference else "",
             "brand_positioning": result.brand_positioning.value if result.brand_positioning else "",
@@ -193,11 +183,17 @@ class TextParser:
             else "",
             "points": [{"name": str(p.value), "count": 1, "notes": ""} for p in result.points],
             "source_type": "text",
+            "trace_id": result.trace_id,
             "_recognition_meta": {
                 "space_type_source": result.space_type.source if result.space_type else None,
                 "space_type_confidence": result.space_type.confidence if result.space_type else 0.0,
             },
         }
+        if result.clarification and result.clarification.needs_clarification:
+            data["needs_clarification"] = True
+            data["clarification_question"] = result.clarification.clarification_question
+            data["missing_fields"] = result.clarification.missing_fields
+            data["low_confidence_fields"] = result.clarification.low_confidence_fields
         return data
 
     def _get_fallback_parse(self, text: str) -> dict[str, Any]:
