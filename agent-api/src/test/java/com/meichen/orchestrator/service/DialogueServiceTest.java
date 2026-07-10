@@ -66,4 +66,35 @@ class DialogueServiceTest {
         assertThat(merged.get("theme")).isEqualTo("圣诞节");
         assertThat(merged.get("budget")).isEqualTo(300000);
     }
+
+    @Test
+    void findMissingCoreFields_emptyWhenAllPresent() {
+        Map<String, Object> merged = Map.of("theme", "圣诞节", "space_type", "快闪店", "budget", 300000);
+        assertThat(dialogueService.findMissingCoreFields(merged)).isEmpty();
+    }
+
+    @Test
+    void findMissingCoreFields_listsOnlyMissing() {
+        Map<String, Object> merged = new java.util.HashMap<>();
+        merged.put("theme", "圣诞节");
+        merged.put("space_type", "");
+        merged.put("budget", null);
+        assertThat(dialogueService.findMissingCoreFields(merged))
+            .containsExactlyInAnyOrder("space_type", "budget");
+    }
+
+    @Test
+    void findMissingCoreFields_rejectsGarbageAsMissing() {
+        Map<String, Object> merged = new java.util.HashMap<>();
+        merged.put("theme", "，");
+        merged.put("space_type", "快闪店");
+        merged.put("budget", 300000);
+        assertThat(dialogueService.findMissingCoreFields(merged)).containsExactly("theme");
+    }
+
+    @Test
+    void buildCoreFieldFollowUp_listsEachMissingField() {
+        String followUp = dialogueService.buildCoreFieldFollowUp(java.util.List.of("budget", "theme"));
+        assertThat(followUp).contains("项目预算").contains("主题或概念");
+    }
 }
