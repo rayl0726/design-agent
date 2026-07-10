@@ -68,6 +68,7 @@ class IntentRecognitionService:
         self,
         text: str,
         previous_intent: ValidatedIntent | None = None,
+        project_id: str | None = None,
     ) -> ValidatedIntent:
         trace_id = str(uuid.uuid4())
 
@@ -83,7 +84,7 @@ class IntentRecognitionService:
         if self._trace_recorder is not None:
             await self._trace_recorder.record(
                 trace_id=trace_id,
-                project_id=None,  # filled by caller
+                project_id=project_id,
                 input_text=text,
                 llm_output=llm_output,
                 rule_output=rule_output,

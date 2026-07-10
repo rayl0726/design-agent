@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from app.services.intent_recognition_result import ValidatedIntent
 from app.services.intent_schemas import IntentOutput
 
 
@@ -23,6 +25,13 @@ class IntentTraceRecorder:
             return None
         return output.model_dump()
 
+    def _dump_validated(
+        self, validated: ValidatedIntent | dict[str, Any]
+    ) -> dict[str, Any]:
+        if hasattr(validated, "model_dump"):
+            return validated.model_dump()
+        return validated
+
     async def record(
         self,
         *,
@@ -32,7 +41,7 @@ class IntentTraceRecorder:
         llm_output: IntentOutput | None,
         rule_output: IntentOutput | None,
         merged_output: IntentOutput | None,
-        validated: Any,
+        validated: ValidatedIntent | dict[str, Any],
     ) -> str:
         trace_id = trace_id or str(uuid.uuid4())
         record = {
@@ -43,36 +52,50 @@ class IntentTraceRecorder:
             "llm_output": self._serialize_output(llm_output),
             "rule_output": self._serialize_output(rule_output),
             "merged_output": self._serialize_output(merged_output),
-            "validated": validated.model_dump() if hasattr(validated, "model_dump") else validated,
+            "validated": self._dump_validated(validated),
         }
         path = self._file_path()
-        with path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+        def _append() -> None:
+            with path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+        await asyncio.to_thread(_append)
         return trace_id
 
     async def list_by_project(self, project_id: str, limit: int = 50) -> list[dict[str, Any]]:
-        results: list[dict[str, Any]] = []
-        for path in sorted(self.base_dir.glob("*.jsonl"), reverse=True):
-            with path.open("r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    record = json.loads(line)
-                    if record.get("project_id") == project_id:
-                        results.append(record)
-            if len(results) >= limit:
-                break
-        return results[:limit]
+        paths = sorted(self.base_dir.glob("*.jsonl"), reverse=True)
+
+        def _read() -> list[dict[str, Any]]:
+            local: list[dict[str, Any]] = []
+            for path in paths:
+                with path.open("r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        record = json.loads(line)
+                        if record.get("project_id") == project_id:
+                            local.append(record)
+                if len(local) >= limit:
+                    break
+            return local[:limit]
+
+        return await asyncio.to_thread(_read)
 
     async def get_by_trace_id(self, trace_id: str) -> dict[str, Any] | None:
-        for path in sorted(self.base_dir.glob("*.jsonl"), reverse=True):
-            with path.open("r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    record = json.loads(line)
-                    if record.get("trace_id") == trace_id:
-                        return record
-        return None
+        paths = sorted(self.base_dir.glob("*.jsonl"), reverse=True)
+
+        def _find() -> dict[str, Any] | None:
+            for path in paths:
+                with path.open("r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        record = json.loads(line)
+                        if record.get("trace_id") == trace_id:
+                            return record
+            return None
+
+        return await asyncio.to_thread(_find)

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from app.services.intent_trace_recorder import IntentTraceRecorder
 
 router = APIRouter(prefix="/api/v1/debug", tags=["debug"])
-
 _recorder = IntentTraceRecorder()
 
 
@@ -18,5 +17,5 @@ async def list_intent_traces(project_id: str, limit: int = Query(50, ge=1, le=20
 async def get_intent_trace(project_id: str, trace_id: str):
     record = await _recorder.get_by_trace_id(trace_id)
     if record is None or record.get("project_id") != project_id:
-        return {"error": "not found"}
+        raise HTTPException(status_code=404, detail="not found")
     return record
