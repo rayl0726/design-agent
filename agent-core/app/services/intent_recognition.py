@@ -14,6 +14,7 @@ from app.services.intent_validator import IntentValidator
 from app.services.llm_client import llm_client as _default_llm_client
 from app.services.semantic_matcher import SemanticMatcher
 from app.services.taxonomy_loader import Taxonomy, load_taxonomy
+from app.services.intent_trace_recorder import IntentTraceRecorder
 
 SEMANTIC_THRESHOLD = 0.82
 
@@ -123,12 +124,18 @@ class IntentRecognitionService:
     def apply_defaults(self, result: ValidatedIntent) -> ValidatedIntent:
         return self._validator.apply_defaults(result)
 
+    def set_trace_recorder(self, recorder: IntentTraceRecorder) -> None:
+        self._trace_recorder = recorder
+
 
 _intent_service: IntentRecognitionService | None = None
+_trace_recorder: IntentTraceRecorder | None = None
 
 
 def get_intent_service() -> IntentRecognitionService:
-    global _intent_service
+    global _intent_service, _trace_recorder
     if _intent_service is None:
+        _trace_recorder = IntentTraceRecorder()
         _intent_service = IntentRecognitionService()
+        _intent_service.set_trace_recorder(_trace_recorder)
     return _intent_service
