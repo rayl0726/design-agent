@@ -127,7 +127,18 @@ class IntentRuleExtractor:
         return found
 
     def _extract_theme(self, text: str, tokens: list[str]) -> str | None:
-        # 显式标记：X主题 / X概念 / Xtheme / X风
+        # 1. 显式 "主题为X" / "主题：X" / "theme: X"：用户明确指定主题，保留原值
+        match = re.search(r"(?:主题|概念|theme)\s*(?:为|是|：|:)\s*([^\n，。]+)", text)
+        if match:
+            candidate = match.group(1).strip()
+            if candidate and not self._is_known_non_theme(
+                candidate, allow_style=True
+            ):
+                return candidate
+            if candidate:
+                return candidate
+
+        # 2. 显式标记：X主题 / X概念 / Xtheme / X风
         # 基于 token 定位，避免正则过捕获前置上下文
         markers = {"主题", "概念", "theme", "风"}
         marker_found = False
@@ -147,13 +158,15 @@ class IntentRuleExtractor:
                     or with_marker_key in self.taxonomy.alias_to_style
                 ):
                     continue
-            if not self._is_known_non_theme(candidate):
+            if not self._is_known_non_theme(candidate, allow_style=True):
                 return candidate
 
-        match = re.search(r"(?:主题|概念|theme)\s*(?:为|是|：|:)\s*([^\n，。]+)", text)
+        # 3. 处理 jieba 将 "海洋主题" 等合并为一个 token 的情况
+        match = re.search(r"([^\n，。]+?)(?:主题|概念|theme)", text)
         if match:
             candidate = match.group(1).strip()
-            if not self._is_known_non_theme(candidate):
+            candidate = re.sub(r"^[为是：:]\s*", "", candidate)
+            if candidate and not self._is_known_non_theme(candidate, allow_style=True):
                 return candidate
 
         # 若已出现显式标记但被跳过（如 style 风），不再使用裸词启发式
@@ -168,32 +181,39 @@ class IntentRuleExtractor:
                     return token
         return None
 
-    def _is_known_non_theme(self, token: str, budget_match: str | None = None) -> bool:
+    def _is_known_non_theme(
+        self,
+        token: str,
+        budget_match: str | None = None,
+        allow_style: bool = False,
+    ) -> bool:
         # 纯数字或 budget 已匹配到的子串不应被视为 theme
         if token.isdigit():
             return True
         if budget_match and token in budget_match:
             return True
-        lowered = token.lower()
         if token in self.taxonomy.space_type_names:
             return True
         if token in self.taxonomy.point_names:
             return True
         if token in self.taxonomy.budget_level_names:
             return True
-        if token in self.taxonomy.style_names:
-            return True
         if token in self.taxonomy.material_names:
             return True
+        lowered = token.lower()
         if lowered in self.taxonomy.alias_to_space_type:
             return True
         if lowered in self.taxonomy.alias_to_point:
             return True
         if lowered in self.taxonomy.alias_to_budget_level:
             return True
-        if lowered in self.taxonomy.alias_to_style:
-            return True
         if lowered in self.taxonomy.alias_to_material:
+            return True
+        if allow_style:
+            return False
+        if token in self.taxonomy.style_names:
+            return True
+        if lowered in self.taxonomy.alias_to_style:
             return True
         # 如果 token 以 "风" 结尾且去掉 "风" 后是 style，也视为 style 而非 theme
         if token.endswith("风") and len(token) > 1:

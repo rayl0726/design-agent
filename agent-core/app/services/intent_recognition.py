@@ -61,7 +61,7 @@ class IntentRecognitionService:
         self._llm_extractor = IntentLLMExtractor(self.taxonomy, self._llm_client)
         self._rule_extractor = IntentRuleExtractor(self.taxonomy)
         self._validator = IntentValidator(self.taxonomy)
-        self._trace_recorder = None  # set in Task 4
+        self._trace_recorder: "IntentTraceRecorder | None" = None  # set in Task 4
 
     async def recognize(
         self,
