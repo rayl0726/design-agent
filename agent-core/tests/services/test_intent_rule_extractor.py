@@ -125,3 +125,20 @@ async def test_extract_explicit_theme_allows_style_alias():
     extractor = IntentRuleExtractor(load_taxonomy())
     output = await extractor.extract("主题为国潮")
     assert output.theme == "国潮"
+
+
+@pytest.mark.asyncio
+async def test_extract_theme_multi_field_with_comma():
+    """Regression: '30万，主题圣诞节' must yield theme='圣诞节', not '，'."""
+    extractor = IntentRuleExtractor(load_taxonomy())
+    output = await extractor.extract("30万，主题圣诞节")
+    assert output.theme == "圣诞节"
+    assert output.budget == "30万"
+
+
+@pytest.mark.asyncio
+async def test_extract_theme_marker_after_punctuation():
+    """A punctuation token before 主题 must not become the theme."""
+    extractor = IntentRuleExtractor(load_taxonomy())
+    output = await extractor.extract("预算30万，主题新年")
+    assert output.theme == "新年"

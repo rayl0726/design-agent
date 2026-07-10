@@ -158,6 +158,12 @@ class IntentRuleExtractor:
                     continue
             if not self._is_known_non_theme(candidate, allow_style=True):
                 return candidate
+            # 前置 token 被拒绝（如标点）时，尝试取标记之后的 token 作为主题
+            # 例如 "30万，主题圣诞节" → "主题" 前是 "，"，应取其后的 "圣诞节"
+            if i + 1 < len(tokens):
+                after_candidate = tokens[i + 1]
+                if not self._is_known_non_theme(after_candidate, allow_style=True):
+                    return after_candidate
 
         # 3. 处理 jieba 将 "海洋主题" 等合并为一个 token 的情况
         match = re.search(r"([^\n，。]+?)(?:主题|概念|theme)", text)
@@ -189,6 +195,12 @@ class IntentRuleExtractor:
         budget_match: str | None = None,
         allow_style: bool = False,
     ) -> bool:
+        # 标点、空白或过短的 token 不应被视为 theme
+        stripped = token.strip()
+        if len(stripped) < 2:
+            return True
+        if re.fullmatch(r"[，。,.;；：:！!？?·、\s]+", stripped):
+            return True
         # 纯数字或 budget 已匹配到的子串不应被视为 theme
         if token.isdigit():
             return True
