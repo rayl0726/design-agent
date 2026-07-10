@@ -129,8 +129,12 @@ public class DialogueService {
             // 7. 完整且无推荐确认则启动 L2 工作流：直接生成带效果图的创意方案
             workflowService.startWorkflow(projectId, "L2", userId);
         } catch (Exception e) {
-            log.error("Dialogue processing failed for project {}: {}", projectId, e.getMessage(), e);
-            SessionMessage msg = sessionMessageService.addAssistantMessage(projectId, "text", "抱歉，处理你的需求时出错了，请再试一次。", project.getUserId());
+            log.error("Dialogue processing failed for project {}: {} — {}",
+                projectId, e.getClass().getName(), e.getMessage(), e);
+            SessionMessage msg = sessionMessageService.addAssistantMessage(
+                projectId, "text",
+                "抱歉，处理你的需求时出错了（" + e.getClass().getSimpleName() + "），请再试一次或换个说法。",
+                project.getUserId());
             pushMessage(projectId, msg);
             sseEmitterService.sendToProject(projectId, "status", Map.of(
                 "project_id", projectId,
@@ -140,6 +144,7 @@ public class DialogueService {
             Map<String, Object> errorEvent = new HashMap<>();
             errorEvent.put("project_id", projectId);
             errorEvent.put("message", e.getMessage() != null ? e.getMessage() : "处理失败");
+            errorEvent.put("exception", e.getClass().getName());
             sseEmitterService.sendToProject(projectId, "error", errorEvent);
         }
     }
