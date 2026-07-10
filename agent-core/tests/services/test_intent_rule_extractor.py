@@ -110,3 +110,18 @@ async def test_extract_space_type_substring_and_alias():
     extractor = IntentRuleExtractor(load_taxonomy())
     output = await extractor.extract("popup store")
     assert output.space_type == "快闪店"
+
+
+@pytest.mark.asyncio
+async def test_extract_explicit_theme_filters_known_non_theme():
+    extractor = IntentRuleExtractor(load_taxonomy())
+    output = await extractor.extract("主题为快闪店")
+    assert output.theme is None
+    assert output.space_type == "快闪店"
+
+
+@pytest.mark.asyncio
+async def test_extract_explicit_theme_allows_style_alias():
+    extractor = IntentRuleExtractor(load_taxonomy())
+    output = await extractor.extract("主题为国潮")
+    assert output.theme == "国潮"

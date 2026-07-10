@@ -18,7 +18,7 @@ from app.services.taxonomy_loader import Taxonomy, load_taxonomy
 SEMANTIC_THRESHOLD = 0.82
 
 
-def _merge_intent_outputs(llm_output: IntentOutput, rule_output: IntentOutput) -> IntentOutput:
+def _merge_intent_outputs(llm_output: IntentOutput | None, rule_output: IntentOutput) -> IntentOutput:
     """规则只补齐 LLM 没有返回的字段。"""
     merged = llm_output.model_copy(deep=True) if llm_output else IntentOutput()
     for field_name in IntentOutput.model_fields:

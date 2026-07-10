@@ -135,8 +135,6 @@ class IntentRuleExtractor:
                 candidate, allow_style=True
             ):
                 return candidate
-            if candidate:
-                return candidate
 
         # 2. 显式标记：X主题 / X概念 / Xtheme / X风
         # 基于 token 定位，避免正则过捕获前置上下文
@@ -177,7 +175,11 @@ class IntentRuleExtractor:
         if len(text) <= 8 and len(tokens) <= 3:
             budget_match = self._extract_budget(text)
             for token in tokens:
-                if len(token) >= 2 and not self._is_known_non_theme(token, budget_match):
+                if (
+                    len(token) >= 2
+                    and token not in markers
+                    and not self._is_known_non_theme(token, budget_match)
+                ):
                     return token
         return None
 
