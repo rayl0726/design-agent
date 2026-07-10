@@ -30,10 +30,27 @@ async def test_extract_points():
 
 
 @pytest.mark.asyncio
+async def test_extract_budget_level_not_theme():
+    extractor = IntentRuleExtractor(load_taxonomy())
+    output = await extractor.extract("低成本快闪店")
+    assert output.space_type == "快闪店"
+    assert output.theme is None
+
+
+@pytest.mark.asyncio
 async def test_extract_style():
     extractor = IntentRuleExtractor(load_taxonomy())
     output = await extractor.extract("国潮风快闪店")
     assert output.style == "国潮"
+    assert output.space_type == "快闪店"
+    assert output.theme is None
+
+
+@pytest.mark.asyncio
+async def test_extract_theme_with_marker():
+    extractor = IntentRuleExtractor(load_taxonomy())
+    output = await extractor.extract("我要做一个情人节主题的快闪店")
+    assert output.theme == "情人节"
     assert output.space_type == "快闪店"
 
 
@@ -51,6 +68,13 @@ async def test_extract_allowed_materials():
     output = await extractor.extract("木材和玻璃可以用")
     assert "木材" in output.allowed_materials
     assert "玻璃" in output.allowed_materials
+
+
+@pytest.mark.asyncio
+async def test_extract_allowed_materials_with_keyi_prefix():
+    extractor = IntentRuleExtractor(load_taxonomy())
+    output = await extractor.extract("可以用亚克力")
+    assert "亚克力" in output.allowed_materials
 
 
 @pytest.mark.asyncio

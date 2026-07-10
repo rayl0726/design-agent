@@ -8,8 +8,8 @@ from rapidfuzz import fuzz
 from app.services.intent_schemas import IntentOutput
 from app.services.taxonomy_loader import Taxonomy
 
-FUZZY_THRESHOLD = 0.75
-FUZZY_THRESHOLD_CRITICAL = 0.85
+_FUZZY_THRESHOLD = 0.75
+_FUZZY_THRESHOLD_CRITICAL = 0.85
 
 
 class IntentRuleExtractor:
@@ -24,6 +24,7 @@ class IntentRuleExtractor:
         sources = (
             self.taxonomy.space_types
             + self.taxonomy.points
+            + self.taxonomy.budget_levels
             + self.taxonomy.styles
             + self.taxonomy.materials
         )
@@ -101,9 +102,9 @@ class IntentRuleExtractor:
         for token in tokens:
             for target, standard in all_targets.items():
                 score = fuzz.ratio(token, target) / 100.0
-                if score >= FUZZY_THRESHOLD and (best is None or score > best[1]):
+                if score >= _FUZZY_THRESHOLD and (best is None or score > best[1]):
                     best = (standard, score)
-        if best and best[1] >= FUZZY_THRESHOLD_CRITICAL:
+        if best and best[1] >= _FUZZY_THRESHOLD_CRITICAL:
             return best[0]
         return None
 
@@ -126,13 +127,38 @@ class IntentRuleExtractor:
         return found
 
     def _extract_theme(self, text: str, tokens: list[str]) -> str | None:
-        # 显式标记：X主题 / X概念 / X风
-        match = re.search(r"([^\n，。]+?)(?:主题|概念|theme|风)", text)
-        if match:
-            return match.group(1).strip()
+        # 显式标记：X主题 / X概念 / Xtheme / X风
+        # 基于 token 定位，避免正则过捕获前置上下文
+        markers = {"主题", "概念", "theme", "风"}
+        marker_found = False
+        for i, token in enumerate(tokens):
+            if token not in markers or i == 0:
+                continue
+            marker_found = True
+            candidate = tokens[i - 1]
+            if token == "风":
+                # 风通常表示 style；如果 candidate 或 candidate+风 命中 style，则不作为 theme
+                candidate_key = candidate.lower()
+                with_marker_key = (candidate + "风").lower()
+                if (
+                    candidate_key in self.taxonomy.style_names
+                    or candidate_key in self.taxonomy.alias_to_style
+                    or with_marker_key in self.taxonomy.style_names
+                    or with_marker_key in self.taxonomy.alias_to_style
+                ):
+                    continue
+            if not self._is_known_non_theme(candidate):
+                return candidate
+
         match = re.search(r"(?:主题|概念|theme)\s*(?:为|是|：|:)\s*([^\n，。]+)", text)
         if match:
-            return match.group(1).strip()
+            candidate = match.group(1).strip()
+            if not self._is_known_non_theme(candidate):
+                return candidate
+
+        # 若已出现显式标记但被跳过（如 style 风），不再使用裸词启发式
+        if marker_found:
+            return None
 
         # 裸词启发式：输入较短、且未命中 space_type/point/style/material/budget 的名词
         if len(text) <= 8 and len(tokens) <= 3:
@@ -153,6 +179,8 @@ class IntentRuleExtractor:
             return True
         if token in self.taxonomy.point_names:
             return True
+        if token in self.taxonomy.budget_level_names:
+            return True
         if token in self.taxonomy.style_names:
             return True
         if token in self.taxonomy.material_names:
@@ -161,10 +189,17 @@ class IntentRuleExtractor:
             return True
         if lowered in self.taxonomy.alias_to_point:
             return True
+        if lowered in self.taxonomy.alias_to_budget_level:
+            return True
         if lowered in self.taxonomy.alias_to_style:
             return True
         if lowered in self.taxonomy.alias_to_material:
             return True
+        # 如果 token 以 "风" 结尾且去掉 "风" 后是 style，也视为 style 而非 theme
+        if token.endswith("风") and len(token) > 1:
+            prefix = token[:-1].lower()
+            if prefix in self.taxonomy.style_names or prefix in self.taxonomy.alias_to_style:
+                return True
         return False
 
     def _extract_budget(self, text: str) -> str | None:
@@ -208,7 +243,7 @@ class IntentRuleExtractor:
         stop_chars = "，。；;"
         patterns = [
             rf"([^{stop_chars}]+?)\s*(?:可以|可用|能用|允许使用)",
-            rf"(?:可用|能用|允许使用)\s*([^{stop_chars}]+)",
+            rf"(?:可以|可用|能用|允许使用)\s*([^{stop_chars}]+)",
         ]
         all_targets: dict[str, str] = {}
         for name in self.taxonomy.material_names:
