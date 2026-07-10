@@ -354,18 +354,6 @@ public class DialogueService {
         }
     }
 
-    private String buildFollowUpQuestion(List<Map<String, Object>> missingFields) {
-        StringBuilder sb = new StringBuilder("为了给你生成更精准的设计方案，我还需要确认以下信息：\n\n");
-        int i = 1;
-        for (Map<String, Object> field : missingFields) {
-            String question = (String) field.get("question");
-            sb.append(i).append(". ").append(question).append("\n");
-            i++;
-        }
-        sb.append("\n你可以一次性补充所有信息，我会继续分析。");
-        return sb.toString();
-    }
-
     private Map<String, Object> parseJson(String json) {
         try {
             if (json == null || json.isEmpty()) return new HashMap<>();
