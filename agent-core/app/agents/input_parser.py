@@ -189,11 +189,6 @@ class TextParser:
                 "space_type_confidence": result.space_type.confidence if result.space_type else 0.0,
             },
         }
-        if result.clarification and result.clarification.needs_clarification:
-            data["needs_clarification"] = True
-            data["clarification_question"] = result.clarification.clarification_question
-            data["missing_fields"] = result.clarification.missing_fields
-            data["low_confidence_fields"] = result.clarification.low_confidence_fields
         return data
 
     def _get_fallback_parse(self, text: str) -> dict[str, Any]:
