@@ -173,7 +173,15 @@ public class DialogueService {
         }
     }
 
-    private Map<String, Object> mergeRequirements(Map<String, Object> existing, Map<String, Object> current) {
+    private static final String PUNCT_CHARS = "，。,.;；：:！!？?·、\\s";
+    private static final List<String> CORE_FIELDS = List.of("theme", "space_type", "budget");
+    private static final Map<String, String> FIELD_QUESTIONS = Map.of(
+        "space_type", "请问设计用在什么类型的商业空间？（如购物中心中庭、快闪店、百货入口等）",
+        "budget", "项目预算大概是多少？",
+        "theme", "您希望设计的主题或概念是什么？"
+    );
+
+    Map<String, Object> mergeRequirements(Map<String, Object> existing, Map<String, Object> current) {
         if (existing == null || existing.isEmpty()) {
             Map<String, Object> result = new HashMap<>(current);
             result.put("raw_inputs", new ArrayList<>(List.of(current)));
@@ -187,7 +195,7 @@ public class DialogueService {
                 "target_audience", "timeline", "color_preference", "brand_positioning",
                 "design_system_preference", "space_description")) {
             Object value = current.get(key);
-            if (value != null && !(value instanceof String s && s.isEmpty())) {
+            if (isValidValue(key, value)) {
                 merged.put(key, value);
             }
         }
@@ -226,6 +234,19 @@ public class DialogueService {
         merged.remove("_recognition_meta");
 
         return merged;
+    }
+
+    boolean isValidValue(String field, Object value) {
+        if (value == null) return false;
+        if (value instanceof Number n) {
+            return n.doubleValue() > 0;
+        }
+        if (!(value instanceof String s)) return true;
+        String trimmed = s.trim().replaceAll("^[" + PUNCT_CHARS + "]+|[" + PUNCT_CHARS + "]+$", "");
+        if (trimmed.length() < 2) return false;
+        if (trimmed.matches("^[" + PUNCT_CHARS + "]+$")) return false;
+        if (("theme".equals(field) || "space_type".equals(field)) && trimmed.matches("^\\d+$")) return false;
+        return true;
     }
 
     @SuppressWarnings("unchecked")
