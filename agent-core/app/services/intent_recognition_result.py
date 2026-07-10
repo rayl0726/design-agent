@@ -84,3 +84,4 @@ class ValidatedIntent(BaseModel):
     special_requirements: list[RecognizedField] = Field(default_factory=list)
     raw_text: str = ""
     clarification: ClarificationRequest | None = None
+    trace_id: str | None = None
