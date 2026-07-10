@@ -77,8 +77,9 @@ async def parse_reference(payload: dict = None):
 @router.post("/agents/input-parser/parse-text")
 async def parse_text(payload: dict):
     text = payload.get("text", "")
+    project_id = payload.get("project_id")
     parser = TextParser()
-    return await parser.parse(text)
+    return await parser.parse(text, project_id=project_id)
 
 
 @router.post("/agents/input-parser/merge")

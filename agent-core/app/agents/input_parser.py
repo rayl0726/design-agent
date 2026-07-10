@@ -154,14 +154,14 @@ class TextParser:
 
     _intent_service = None
 
-    async def parse(self, text: str) -> dict[str, Any]:
+    async def parse(self, text: str, project_id: str | None = None) -> dict[str, Any]:
         from app.core.config import settings
 
         if getattr(settings, "intent_parser_legacy", False):
             return self._get_fallback_parse(text)
 
         service = self._intent_service or get_intent_service()
-        result = await service.recognize(text)
+        result = await service.recognize(text, project_id=project_id)
         return self._validated_intent_to_dict(result)
 
     def _validated_intent_to_dict(self, result) -> dict[str, Any]:

@@ -34,3 +34,20 @@ async def test_parse_text_omits_clarification_fields(text_parser: TextParser):
     assert "clarification_question" not in result
     assert "missing_fields" not in result
     assert "low_confidence_fields" not in result
+
+
+@pytest.mark.asyncio
+async def test_parse_text_passes_project_id_to_recognize(monkeypatch):
+    """project_id must be threaded through to recognize() so traces are correlatable."""
+    captured_project_id = {}
+
+    class StubService:
+        async def recognize(self, text, previous_intent=None, project_id=None):
+            captured_project_id["value"] = project_id
+            from app.services.intent_recognition_result import ValidatedIntent
+            return ValidatedIntent(raw_text=text)
+
+    monkeypatch.setattr("app.agents.input_parser.get_intent_service", lambda: StubService())
+    parser = TextParser()
+    await parser.parse("圣诞节", project_id="proj-abc-123")
+    assert captured_project_id["value"] == "proj-abc-123"
