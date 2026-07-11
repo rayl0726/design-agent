@@ -30,7 +30,7 @@ class PromptTemplateAdminServiceTest {
         File templateFile = new File(templateDir, "shopping_mall_atrium.yaml");
         templateFile.createNewFile();
         java.nio.file.Files.writeString(templateFile.toPath(),
-            "space_type: \"购物中心中庭\"\nversion: \"1.0\"\n");
+            "space_types:\n  - \"购物中心中庭\"\nversion: \"1.0\"\n");
 
         service = new PromptTemplateAdminService(feedbackRepo, "http://localhost:8000", tempDir.getAbsolutePath());
     }

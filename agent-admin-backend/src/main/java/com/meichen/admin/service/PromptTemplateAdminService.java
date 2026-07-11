@@ -41,7 +41,9 @@ public class PromptTemplateAdminService {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> yaml = yamlMapper.readValue(file, Map.class);
                 String name = file.getName().replace(".yaml", "").replace(".yml", "");
-                String spaceType = (String) yaml.getOrDefault("space_type", "");
+                @SuppressWarnings("unchecked")
+                List<String> spaceTypes = (List<String>) yaml.getOrDefault("space_types", List.of());
+                String spaceType = spaceTypes != null ? String.join(", ", spaceTypes) : "";
                 String version = (String) yaml.getOrDefault("version", "1.0");
                 templates.add(new PromptTemplateInfoDTO(name, spaceType, version));
             } catch (Exception e) {
@@ -71,7 +73,7 @@ public class PromptTemplateAdminService {
             .bodyValue(Map.of(
                 "theme", request.theme() != null ? request.theme() : "",
                 "space_type", request.spaceType() != null ? request.spaceType() : "",
-                "budget", request.budget() != null ? request.budget() : 0,
+                "budget_level", request.budgetLevel() != null ? request.budgetLevel() : "medium",
                 "style", request.style() != null ? request.style() : ""
             ))
             .retrieve()
