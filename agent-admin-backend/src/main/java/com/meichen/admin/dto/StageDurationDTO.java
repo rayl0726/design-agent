@@ -2,9 +2,9 @@ package com.meichen.admin.dto;
 
 public record StageDurationDTO(
     String stageName,
-    Double avgMs,
-    Double p95Ms,
+    Long avgMs,
+    Long p95Ms,
     Long maxMs,
-    Integer successCount,
-    Integer failedCount
+    Long successCount,
+    Long failedCount
 ) {}

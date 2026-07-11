@@ -48,8 +48,8 @@ public class MetricsAdminService {
             s.getAvgMs(),
             s.getP95Ms(),
             s.getMaxMs(),
-            s.getSuccessCount() != null ? s.getSuccessCount() : 0,
-            s.getFailedCount() != null ? s.getFailedCount() : 0
+            s.getSuccessCount() != null ? s.getSuccessCount() : 0L,
+            s.getFailedCount() != null ? s.getFailedCount() : 0L
         )).toList();
     }
 

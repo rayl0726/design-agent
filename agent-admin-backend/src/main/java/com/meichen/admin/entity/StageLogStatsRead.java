@@ -21,26 +21,26 @@ public class StageLogStatsRead {
     private LocalDateTime windowEnd;
 
     @Column(name = "avg_ms")
-    private Double avgMs;
+    private Long avgMs;
 
     @Column(name = "p95_ms")
-    private Double p95Ms;
+    private Long p95Ms;
 
     @Column(name = "max_ms")
     private Long maxMs;
 
     @Column(name = "success_count")
-    private Integer successCount;
+    private Long successCount;
 
     @Column(name = "failed_count")
-    private Integer failedCount;
+    private Long failedCount;
 
     public String getStageName() { return stageName; }
     public LocalDateTime getWindowStart() { return windowStart; }
     public LocalDateTime getWindowEnd() { return windowEnd; }
-    public Double getAvgMs() { return avgMs; }
-    public Double getP95Ms() { return p95Ms; }
+    public Long getAvgMs() { return avgMs; }
+    public Long getP95Ms() { return p95Ms; }
     public Long getMaxMs() { return maxMs; }
-    public Integer getSuccessCount() { return successCount; }
-    public Integer getFailedCount() { return failedCount; }
+    public Long getSuccessCount() { return successCount; }
+    public Long getFailedCount() { return failedCount; }
 }
