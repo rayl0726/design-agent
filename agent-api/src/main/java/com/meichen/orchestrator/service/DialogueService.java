@@ -87,6 +87,13 @@ public class DialogueService {
 
             // 3. 快速规则完整性检查（基于合并后状态，不调 LLM）
             List<String> missingCoreFields = findMissingCoreFields(merged);
+
+            // 发送意图识别调试事件（供前端展示）
+            Map<String, Object> discarded = findDiscardedFields(textParse);
+            Map<String, Object> recognitionSummary = buildRecognitionSummary(
+                projectId, content, textParse, discarded, missingCoreFields);
+            sseEmitterService.sendToProject(projectId, "recognition", recognitionSummary);
+
             if (!missingCoreFields.isEmpty()) {
                 String followUp = buildCoreFieldFollowUp(missingCoreFields);
                 log.info("core fields still missing for project {}: {}", projectId, missingCoreFields);
@@ -267,6 +274,24 @@ public class DialogueService {
         }
         sb.append("\n你可以一次性补充所有信息，我会继续分析。");
         return sb.toString();
+    }
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> buildRecognitionSummary(
+            String projectId,
+            String inputText,
+            Map<String, Object> textParse,
+            Map<String, Object> discardedFields,
+            List<String> missingCoreFields) {
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("project_id", projectId);
+        summary.put("trace_id", textParse.getOrDefault("trace_id", ""));
+        summary.put("input_text", inputText);
+        Object meta = textParse.get("_recognition_meta");
+        summary.put("recognition_meta", meta instanceof Map ? meta : new HashMap<>());
+        summary.put("discarded_fields", discardedFields);
+        summary.put("missing_core_fields", missingCoreFields);
+        return summary;
     }
 
     @SuppressWarnings("unchecked")

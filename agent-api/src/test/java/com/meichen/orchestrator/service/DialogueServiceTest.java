@@ -116,4 +116,40 @@ class DialogueServiceTest {
         Map<String, Object> discarded = dialogueService.findDiscardedFields(current);
         assertThat(discarded).isEmpty();
     }
+
+    @Test
+    void buildRecognitionSummary_includesAllDebugInfo() {
+        Map<String, Object> textParse = new java.util.HashMap<>();
+        textParse.put("trace_id", "trace-abc");
+        textParse.put("theme", "圣诞节");
+        Map<String, Object> meta = new java.util.HashMap<>();
+        meta.put("theme_source", "llm");
+        meta.put("theme_confidence", 0.85);
+        meta.put("space_type_source", null);
+        meta.put("space_type_confidence", 0.0);
+        textParse.put("_recognition_meta", meta);
+        Map<String, Object> discarded = Map.of("budget", "abc");
+        java.util.List<String> missing = java.util.List.of("space_type", "budget");
+
+        Map<String, Object> summary = dialogueService.buildRecognitionSummary(
+            "proj-123", "用户输入圣诞节", textParse, discarded, missing
+        );
+
+        assertThat(summary.get("project_id")).isEqualTo("proj-123");
+        assertThat(summary.get("trace_id")).isEqualTo("trace-abc");
+        assertThat(summary.get("input_text")).isEqualTo("用户输入圣诞节");
+        assertThat(summary.get("discarded_fields")).isEqualTo(discarded);
+        assertThat(summary.get("missing_core_fields")).isEqualTo(missing);
+        assertThat(summary.get("recognition_meta")).isNotNull();
+    }
+
+    @Test
+    void buildRecognitionSummary_handlesNullMeta() {
+        Map<String, Object> textParse = Map.of("trace_id", "t1");
+        Map<String, Object> summary = dialogueService.buildRecognitionSummary(
+            "p1", "hello", textParse, Map.of(), java.util.List.of()
+        );
+        assertThat(summary.get("recognition_meta")).isInstanceOf(Map.class);
+        assertThat((Map<?, ?>) summary.get("recognition_meta")).isEmpty();
+    }
 }
