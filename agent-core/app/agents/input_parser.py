@@ -154,14 +154,14 @@ class TextParser:
 
     _intent_service = None
 
-    async def parse(self, text: str) -> dict[str, Any]:
+    async def parse(self, text: str, project_id: str | None = None) -> dict[str, Any]:
         from app.core.config import settings
 
         if getattr(settings, "intent_parser_legacy", False):
             return self._get_fallback_parse(text)
 
         service = self._intent_service or get_intent_service()
-        result = await service.recognize(text)
+        result = await service.recognize(text, project_id=project_id)
         return self._validated_intent_to_dict(result)
 
     def _validated_intent_to_dict(self, result) -> dict[str, Any]:
@@ -184,17 +184,25 @@ class TextParser:
             "points": [{"name": str(p.value), "count": 1, "notes": ""} for p in result.points],
             "source_type": "text",
             "trace_id": result.trace_id,
-            "_recognition_meta": {
-                "space_type_source": result.space_type.source if result.space_type else None,
-                "space_type_confidence": result.space_type.confidence if result.space_type else 0.0,
-            },
+            "_recognition_meta": self._build_recognition_meta(result),
         }
-        if result.clarification and result.clarification.needs_clarification:
-            data["needs_clarification"] = True
-            data["clarification_question"] = result.clarification.clarification_question
-            data["missing_fields"] = result.clarification.missing_fields
-            data["low_confidence_fields"] = result.clarification.low_confidence_fields
         return data
+
+    def _build_recognition_meta(self, result) -> dict[str, Any]:
+        """Extract source/confidence/raw_text for all core fields for debug observability."""
+        meta: dict[str, Any] = {"trace_id": result.trace_id}
+        for field_name in ("theme", "space_type", "budget", "budget_level", "style"):
+            field = getattr(result, field_name)
+            if field is not None:
+                source = field.source
+                meta[f"{field_name}_source"] = source.value if hasattr(source, "value") else str(source)
+                meta[f"{field_name}_confidence"] = field.confidence
+                meta[f"{field_name}_raw_text"] = field.raw_text
+            else:
+                meta[f"{field_name}_source"] = None
+                meta[f"{field_name}_confidence"] = 0.0
+                meta[f"{field_name}_raw_text"] = ""
+        return meta
 
     def _get_fallback_parse(self, text: str) -> dict[str, Any]:
         import re

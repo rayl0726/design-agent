@@ -132,6 +132,7 @@
               class="thinking-wrapper"
             >
               <ThinkingProcess :logs="thinkingLogs" :is-running="session.status === 'PARSING'" />
+              <RecognitionDebug v-if="recognitionSummary" :summary="recognitionSummary" />
             </div>
           </template>
         </template>
@@ -236,6 +237,7 @@ import { useAuthStore } from '@/stores/auth'
 import TextMessage from '../components/chat/TextMessage.vue'
 import IdeaGallery from '../components/chat/IdeaGallery.vue'
 import ThinkingProcess from '../components/chat/ThinkingProcess.vue'
+import RecognitionDebug from '../components/chat/RecognitionDebug.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -249,6 +251,7 @@ const sending = ref(false)
 const creating = ref(false)
 const messageList = ref(null)
 const thinkingLogs = ref([])
+const recognitionSummary = ref(null)
 const logDrawerOpen = ref(false)
 const stageLogs = ref([])
 const logLoading = ref(false)
@@ -345,6 +348,7 @@ const loadMessages = async () => {
 }
 
 const loadThinkingLogs = async () => {
+  recognitionSummary.value = null
   if (!sessionId.value) {
     thinkingLogs.value = []
     return
@@ -482,6 +486,8 @@ const connectSse = (projectId) => {
             })
           }
           scrollToBottom()
+        } else if (msg.event === 'recognition') {
+          recognitionSummary.value = data
         } else if (msg.event === 'error') {
           ElMessage.error(data.message || '处理出错')
         }

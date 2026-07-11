@@ -1,0 +1,155 @@
+package com.meichen.orchestrator.service;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.reactive.function.client.WebClient;
+
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+@ExtendWith(MockitoExtension.class)
+class DialogueServiceTest {
+
+    private DialogueService dialogueService;
+
+    @BeforeEach
+    void setUp() {
+        dialogueService = new DialogueService(
+            WebClient.builder(),
+            null, null, null, new ObjectMapper(), null, Runnable::run, "http://localhost:8000"
+        );
+    }
+
+    @Test
+    void isValidValue_rejectsPunctuationOnly() {
+        assertThat(dialogueService.isValidValue("theme", "，")).isFalse();
+        assertThat(dialogueService.isValidValue("theme", ",")).isFalse();
+        assertThat(dialogueService.isValidValue("theme", "。")).isFalse();
+    }
+
+    @Test
+    void isValidValue_rejectsNullAndBlank() {
+        assertThat(dialogueService.isValidValue("theme", null)).isFalse();
+        assertThat(dialogueService.isValidValue("theme", "")).isFalse();
+        assertThat(dialogueService.isValidValue("theme", "   ")).isFalse();
+    }
+
+    @Test
+    void isValidValue_acceptsMeaningfulString() {
+        assertThat(dialogueService.isValidValue("theme", "圣诞节")).isTrue();
+        assertThat(dialogueService.isValidValue("space_type", "快闪店")).isTrue();
+        assertThat(dialogueService.isValidValue("budget", "30万")).isTrue();
+    }
+
+    @Test
+    void isValidValue_acceptsNumericBudget() {
+        assertThat(dialogueService.isValidValue("budget", 300000)).isTrue();
+        assertThat(dialogueService.isValidValue("budget", 0)).isFalse();
+    }
+
+    @Test
+    void isValidValue_rejectsPureDigitTheme() {
+        assertThat(dialogueService.isValidValue("theme", "123")).isFalse();
+        assertThat(dialogueService.isValidValue("space_type", "45")).isFalse();
+    }
+
+    @Test
+    void mergeRequirements_doesNotOverwriteValidWithGarbage() {
+        Map<String, Object> existing = Map.of("theme", "圣诞节");
+        Map<String, Object> current = Map.of("theme", "，", "budget", 300000);
+        Map<String, Object> merged = dialogueService.mergeRequirements(existing, current);
+        assertThat(merged.get("theme")).isEqualTo("圣诞节");
+        assertThat(merged.get("budget")).isEqualTo(300000);
+    }
+
+    @Test
+    void findMissingCoreFields_emptyWhenAllPresent() {
+        Map<String, Object> merged = Map.of("theme", "圣诞节", "space_type", "快闪店", "budget", 300000);
+        assertThat(dialogueService.findMissingCoreFields(merged)).isEmpty();
+    }
+
+    @Test
+    void findMissingCoreFields_listsOnlyMissing() {
+        Map<String, Object> merged = new java.util.HashMap<>();
+        merged.put("theme", "圣诞节");
+        merged.put("space_type", "");
+        merged.put("budget", null);
+        assertThat(dialogueService.findMissingCoreFields(merged))
+            .containsExactlyInAnyOrder("space_type", "budget");
+    }
+
+    @Test
+    void findMissingCoreFields_rejectsGarbageAsMissing() {
+        Map<String, Object> merged = new java.util.HashMap<>();
+        merged.put("theme", "，");
+        merged.put("space_type", "快闪店");
+        merged.put("budget", 300000);
+        assertThat(dialogueService.findMissingCoreFields(merged)).containsExactly("theme");
+    }
+
+    @Test
+    void buildCoreFieldFollowUp_listsEachMissingField() {
+        String followUp = dialogueService.buildCoreFieldFollowUp(java.util.List.of("budget", "theme"));
+        assertThat(followUp).contains("项目预算").contains("主题或概念");
+    }
+
+    @Test
+    void findDiscardedFields_identifiesInvalidValues() {
+        Map<String, Object> current = new java.util.HashMap<>();
+        current.put("theme", "，");          // invalid: punctuation-only
+        current.put("space_type", "快闪店"); // valid
+        current.put("budget", 0);            // invalid: Number not > 0
+        current.put("style", "。");          // invalid: punctuation-only
+        Map<String, Object> discarded = dialogueService.findDiscardedFields(current);
+        assertThat(discarded).containsKeys("theme", "budget", "style");
+        assertThat(discarded).doesNotContainKey("space_type");
+        assertThat(discarded.get("theme")).isEqualTo("，");
+    }
+
+    @Test
+    void findDiscardedFields_emptyWhenAllValid() {
+        Map<String, Object> current = Map.of("theme", "圣诞节", "space_type", "快闪店", "budget", 300000);
+        Map<String, Object> discarded = dialogueService.findDiscardedFields(current);
+        assertThat(discarded).isEmpty();
+    }
+
+    @Test
+    void buildRecognitionSummary_includesAllDebugInfo() {
+        Map<String, Object> textParse = new java.util.HashMap<>();
+        textParse.put("trace_id", "trace-abc");
+        textParse.put("theme", "圣诞节");
+        Map<String, Object> meta = new java.util.HashMap<>();
+        meta.put("theme_source", "llm");
+        meta.put("theme_confidence", 0.85);
+        meta.put("space_type_source", null);
+        meta.put("space_type_confidence", 0.0);
+        textParse.put("_recognition_meta", meta);
+        Map<String, Object> discarded = Map.of("budget", "abc");
+        java.util.List<String> missing = java.util.List.of("space_type", "budget");
+
+        Map<String, Object> summary = dialogueService.buildRecognitionSummary(
+            "proj-123", "用户输入圣诞节", textParse, discarded, missing
+        );
+
+        assertThat(summary.get("project_id")).isEqualTo("proj-123");
+        assertThat(summary.get("trace_id")).isEqualTo("trace-abc");
+        assertThat(summary.get("input_text")).isEqualTo("用户输入圣诞节");
+        assertThat(summary.get("discarded_fields")).isEqualTo(discarded);
+        assertThat(summary.get("missing_core_fields")).isEqualTo(missing);
+        assertThat(summary.get("recognition_meta")).isNotNull();
+    }
+
+    @Test
+    void buildRecognitionSummary_handlesNullMeta() {
+        Map<String, Object> textParse = Map.of("trace_id", "t1");
+        Map<String, Object> summary = dialogueService.buildRecognitionSummary(
+            "p1", "hello", textParse, Map.of(), java.util.List.of()
+        );
+        assertThat(summary.get("recognition_meta")).isInstanceOf(Map.class);
+        assertThat((Map<?, ?>) summary.get("recognition_meta")).isEmpty();
+    }
+}

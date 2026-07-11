@@ -76,11 +76,15 @@ class IntentLLMExtractor:
     async def _few_shot_prompt_fragment(self, text: str) -> str:
         if self._few_shot_library is None:
             return ""
-        examples = await self._few_shot_library.retrieve(
-            space_type=self._extract_space_type_hint(text),
-            theme=self._extract_theme_hint(text),
-            top_k=3,
-        )
+        try:
+            examples = await self._few_shot_library.retrieve(
+                space_type=self._extract_space_type_hint(text),
+                theme=self._extract_theme_hint(text),
+                top_k=3,
+            )
+        except Exception as e:
+            print(f"FewShotLibrary retrieve failed (non-fatal): {type(e).__name__}: {e}")
+            return ""
         if not examples:
             return ""
         rendered = "\n参考示例（输入 -> 输出）：\n" + "\n".join(

@@ -1,20 +1,20 @@
 ## 1. Prompt Template Data & Configuration
 
-- [ ] 1.1 Create `agent-core/data/prompt_templates/` directory and add `generic_commercial_display.yaml` with structured sections (subject, environment, camera, lighting, style, negative).
-- [ ] 1.2 Add `agent-core/data/prompt_templates/shopping_mall_atrium.yaml` optimized for central-atrium subject prominence and background minimization.
-- [ ] 1.3 Create `agent-core/data/negative_prompts/default.yaml` with selectable negative prompt categories.
+- [x] 1.1 Create `agent-core/data/prompt_templates/` directory and add `generic_commercial_display.yaml` with structured sections (subject, environment, camera, lighting, style, negative).
+- [x] 1.2 Add `agent-core/data/prompt_templates/shopping_mall_atrium.yaml` optimized for central-atrium subject prominence and background minimization.
+- [x] 1.3 Create `agent-core/data/negative_prompts/default.yaml` with selectable negative prompt categories.
 
 ## 2. Prompt Template Renderer
 
-- [ ] 2.1 Implement `PromptTemplate` dataclass and `PromptTemplateLoader` in `agent-core/app/services/prompt_template_loader.py`.
-- [ ] 2.2 Implement `PromptTemplateRenderer` in `agent-core/app/services/prompt_template_renderer.py` using Jinja2 to render templates with theme, space_type, budget, style variables.
-- [ ] 2.3 Add renderer unit tests in `agent-core/tests/services/test_prompt_template_renderer.py` verifying atrium template emphasizes central area.
+- [x] 2.1 Implement `PromptTemplate` dataclass and `PromptTemplateLoader` in `agent-core/app/services/prompt_template_loader.py`.
+- [x] 2.2 Implement `PromptTemplateRenderer` in `agent-core/app/services/prompt_template_renderer.py` using Jinja2 to render templates with theme, space_type, budget, style variables.
+- [x] 2.3 Add renderer unit tests in `agent-core/tests/services/test_prompt_template_renderer.py` verifying atrium template emphasizes central area.
 
 ## 3. Image Generation Integration
 
-- [ ] 3.1 Modify `agent-core/app/services/image_generation.py` to call `PromptTemplateRenderer` when `prompt_template_version` is present.
-- [ ] 3.2 Preserve legacy prompt concatenation path when no template version is configured.
-- [ ] 3.3 Add integration test in `agent-core/tests/services/test_image_generation.py` asserting rendered prompt contains expected subject and negative sections.
+- [x] 3.1 Modify `agent-core/app/services/image_generation.py` to call `PromptTemplateRenderer` when `prompt_template_version` is present.
+- [x] 3.2 Preserve legacy prompt concatenation path when no template version is configured.
+- [x] 3.3 Add integration test in `agent-core/tests/services/test_image_generation.py` asserting rendered prompt contains expected subject and negative sections.
 
 ## 4. Learning Flywheel - Feedback Capture
 
@@ -44,5 +44,5 @@
 ## 8. Rollout & Verification
 
 - [x] 8.1 Run full `agent-core` and `agent-api` test suites with no regressions.
-- [ ] 8.2 Start local services and generate sample images for "购物中心中庭 圣诞节" to visually verify subject prominence.
+- [x] 8.2 Start local services and generate sample images for "购物中心中庭 圣诞节" to visually verify subject prominence.
 - [x] 8.3 Commit changes, merge to main, and push to origin.

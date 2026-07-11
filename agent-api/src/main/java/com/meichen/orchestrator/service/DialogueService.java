@@ -71,62 +71,32 @@ public class DialogueService {
 
             // 1. 文本解析
             pushThinking(projectId, "text_parse", "started");
-            Map<String, Object> textParse = postToAgent("/agents/input-parser/parse-text", Map.of("text", content));
+            Map<String, Object> textParse = postToAgent(
+                "/agents/input-parser/parse-text",
+                Map.of("text", content, "project_id", projectId)
+            );
             log.info("text_parse result: {}", textParse);
             pushThinking(projectId, "text_parse", "completed");
 
-            // 1.5 意图不完整时发起澄清，但仍合并已解析的字段
-            Object needsClarificationObj = textParse.get("needs_clarification");
-            Boolean needsClarification = needsClarificationObj instanceof Boolean
-                ? (Boolean) needsClarificationObj
-                : Boolean.valueOf(String.valueOf(needsClarificationObj));
-            if (Boolean.TRUE.equals(needsClarification)) {
-                Map<String, Object> existingRequirement = parseJson(project.getRequirementJson());
-                Map<String, Object> merged = mergeRequirements(existingRequirement, textParse);
-                project.setRequirementJson(toJson(merged));
-                projectRepository.save(project);
-
-                String clarificationQuestion = textParse.get("clarification_question") != null
-                    ? String.valueOf(textParse.get("clarification_question"))
-                    : "能否补充一下上述信息？";
-                log.info("Intent needs clarification for project {}: {}", projectId, clarificationQuestion);
-                SessionMessage msg = sessionMessageService.addAssistantMessage(projectId, "text", clarificationQuestion, project.getUserId());
-                pushMessage(projectId, msg);
-                Map<String, Object> initStatus = new HashMap<>();
-                initStatus.put("project_id", projectId);
-                initStatus.put("status", "INIT");
-                initStatus.put("current_level", project.getCurrentLevel() != null ? project.getCurrentLevel() : "");
-                sseEmitterService.sendToProject(projectId, "status", initStatus);
-                return;
-            }
-
-            // 2. 与历史需求合并
+            // 2. 与历史需求合并（含有效性校验，丢弃垃圾值）
             Map<String, Object> existingRequirement = parseJson(project.getRequirementJson());
             Map<String, Object> merged = mergeRequirements(existingRequirement, textParse);
             log.info("merged requirement: {}", merged);
-
-            // 3. 需求分析
-            pushThinking(projectId, "requirement_analyze", "started");
-            Map<String, Object> requirement = postToAgent("/agents/requirement-analyst/analyze", merged);
-            log.info("requirement_analyze result keys: {}", requirement.keySet());
-            log.info("requirement analyze details: is_complete={}, missing_fields={}",
-                requirement.get("is_complete"), requirement.get("missing_fields"));
-            pushThinking(projectId, "requirement_analyze", "completed");
-
-            // 4. 保存当前合并后的需求
-            project.setRequirementJson(toJson(requirement));
+            project.setRequirementJson(toJson(merged));
             projectRepository.save(project);
 
-            // 5. 检查是否完整
-            Object isCompleteObj = requirement.get("is_complete");
-            Boolean isComplete = isCompleteObj instanceof Boolean ? (Boolean) isCompleteObj : Boolean.valueOf(String.valueOf(isCompleteObj));
+            // 3. 快速规则完整性检查（基于合并后状态，不调 LLM）
+            List<String> missingCoreFields = findMissingCoreFields(merged);
 
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> missingFields = (List<Map<String, Object>>) requirement.get("missing_fields");
+            // 发送意图识别调试事件（供前端展示）
+            Map<String, Object> discarded = findDiscardedFields(textParse);
+            Map<String, Object> recognitionSummary = buildRecognitionSummary(
+                projectId, content, textParse, discarded, missingCoreFields);
+            sseEmitterService.sendToProject(projectId, "recognition", recognitionSummary);
 
-            if (!isComplete && missingFields != null && !missingFields.isEmpty()) {
-                String followUp = buildFollowUpQuestion(missingFields);
-                log.info("requirement incomplete, sending follow-up");
+            if (!missingCoreFields.isEmpty()) {
+                String followUp = buildCoreFieldFollowUp(missingCoreFields);
+                log.info("core fields still missing for project {}: {}", projectId, missingCoreFields);
                 SessionMessage msg = sessionMessageService.addAssistantMessage(projectId, "text", followUp, project.getUserId());
                 pushMessage(projectId, msg);
                 Map<String, Object> initStatus = new HashMap<>();
@@ -136,6 +106,17 @@ public class DialogueService {
                 sseEmitterService.sendToProject(projectId, "status", initStatus);
                 return;
             }
+
+            // 4. 核心字段齐全 → 需求分析（深度分析 + 推荐值）
+            pushThinking(projectId, "requirement_analyze", "started");
+            Map<String, Object> requirement = postToAgent("/agents/requirement-analyst/analyze", merged);
+            log.info("requirement_analyze result keys: {}", requirement.keySet());
+            pushThinking(projectId, "requirement_analyze", "completed");
+
+            // 5. 合并分析结果到已累积需求（保留核心字段，清理分析元数据）
+            Map<String, Object> analyzed = mergeRequirements(merged, requirement);
+            project.setRequirementJson(toJson(analyzed));
+            projectRepository.save(project);
 
             // 6. 检查是否有推荐值需要确认
             @SuppressWarnings("unchecked")
@@ -158,8 +139,12 @@ public class DialogueService {
             // 7. 完整且无推荐确认则启动 L2 工作流：直接生成带效果图的创意方案
             workflowService.startWorkflow(projectId, "L2", userId);
         } catch (Exception e) {
-            log.error("Dialogue processing failed for project {}: {}", projectId, e.getMessage(), e);
-            SessionMessage msg = sessionMessageService.addAssistantMessage(projectId, "text", "抱歉，处理你的需求时出错了，请再试一次。", project.getUserId());
+            log.error("Dialogue processing failed for project {}: {} — {}",
+                projectId, e.getClass().getName(), e.getMessage(), e);
+            SessionMessage msg = sessionMessageService.addAssistantMessage(
+                projectId, "text",
+                "抱歉，处理你的需求时出错了（" + e.getClass().getSimpleName() + "），请再试一次或换个说法。",
+                project.getUserId());
             pushMessage(projectId, msg);
             sseEmitterService.sendToProject(projectId, "status", Map.of(
                 "project_id", projectId,
@@ -169,11 +154,20 @@ public class DialogueService {
             Map<String, Object> errorEvent = new HashMap<>();
             errorEvent.put("project_id", projectId);
             errorEvent.put("message", e.getMessage() != null ? e.getMessage() : "处理失败");
+            errorEvent.put("exception", e.getClass().getName());
             sseEmitterService.sendToProject(projectId, "error", errorEvent);
         }
     }
 
-    private Map<String, Object> mergeRequirements(Map<String, Object> existing, Map<String, Object> current) {
+    private static final String PUNCT_CHARS = "，。,.;；：:！!？?·、\\s";
+    private static final List<String> CORE_FIELDS = List.of("theme", "space_type", "budget");
+    private static final Map<String, String> FIELD_QUESTIONS = Map.of(
+        "space_type", "请问设计用在什么类型的商业空间？（如购物中心中庭、快闪店、百货入口等）",
+        "budget", "项目预算大概是多少？",
+        "theme", "您希望设计的主题或概念是什么？"
+    );
+
+    Map<String, Object> mergeRequirements(Map<String, Object> existing, Map<String, Object> current) {
         if (existing == null || existing.isEmpty()) {
             Map<String, Object> result = new HashMap<>(current);
             result.put("raw_inputs", new ArrayList<>(List.of(current)));
@@ -187,9 +181,15 @@ public class DialogueService {
                 "target_audience", "timeline", "color_preference", "brand_positioning",
                 "design_system_preference", "space_description")) {
             Object value = current.get(key);
-            if (value != null && !(value instanceof String s && s.isEmpty())) {
+            if (isValidValue(key, value)) {
                 merged.put(key, value);
             }
+        }
+
+        // Log discarded invalid field values for debug observability
+        Map<String, Object> discarded = findDiscardedFields(current);
+        if (!discarded.isEmpty()) {
+            log.info("discarded invalid field values during merge: {}", discarded);
         }
 
         // 数组字段：合并去重
@@ -226,6 +226,72 @@ public class DialogueService {
         merged.remove("_recognition_meta");
 
         return merged;
+    }
+
+    boolean isValidValue(String field, Object value) {
+        if (value == null) return false;
+        if (value instanceof Number n) {
+            return n.doubleValue() > 0;
+        }
+        if (!(value instanceof String s)) return true;
+        String trimmed = s.trim().replaceAll("^[" + PUNCT_CHARS + "]+|[" + PUNCT_CHARS + "]+$", "");
+        if (trimmed.length() < 2) return false;
+        if (trimmed.matches("^[" + PUNCT_CHARS + "]+$")) return false;
+        if (("theme".equals(field) || "space_type".equals(field)) && trimmed.matches("^\\d+$")) return false;
+        return true;
+    }
+
+    Map<String, Object> findDiscardedFields(Map<String, Object> current) {
+        Map<String, Object> discarded = new LinkedHashMap<>();
+        if (current == null) return discarded;
+        for (String key : List.of("theme", "style", "space_type", "budget", "budget_level",
+                "target_audience", "timeline", "color_preference", "brand_positioning",
+                "design_system_preference", "space_description")) {
+            Object value = current.get(key);
+            if (value != null && !isValidValue(key, value)) {
+                discarded.put(key, value);
+            }
+        }
+        return discarded;
+    }
+
+    java.util.List<String> findMissingCoreFields(Map<String, Object> merged) {
+        java.util.List<String> missing = new java.util.ArrayList<>();
+        for (String f : CORE_FIELDS) {
+            if (!isValidValue(f, merged.get(f))) {
+                missing.add(f);
+            }
+        }
+        return missing;
+    }
+
+    String buildCoreFieldFollowUp(java.util.List<String> missing) {
+        StringBuilder sb = new StringBuilder("为了给你生成更精准的设计方案，我还需要确认以下信息：\n\n");
+        int i = 1;
+        for (String f : missing) {
+            sb.append(i).append(". ").append(FIELD_QUESTIONS.getOrDefault(f, "请补充" + f)).append("\n");
+            i++;
+        }
+        sb.append("\n你可以一次性补充所有信息，我会继续分析。");
+        return sb.toString();
+    }
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> buildRecognitionSummary(
+            String projectId,
+            String inputText,
+            Map<String, Object> textParse,
+            Map<String, Object> discardedFields,
+            List<String> missingCoreFields) {
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("project_id", projectId);
+        summary.put("trace_id", textParse.getOrDefault("trace_id", ""));
+        summary.put("input_text", inputText);
+        Object meta = textParse.get("_recognition_meta");
+        summary.put("recognition_meta", meta instanceof Map ? meta : new HashMap<>());
+        summary.put("discarded_fields", discardedFields);
+        summary.put("missing_core_fields", missingCoreFields);
+        return summary;
     }
 
     @SuppressWarnings("unchecked")
@@ -334,18 +400,6 @@ public class DialogueService {
         if (value != null && !(value instanceof String s && s.isEmpty())) {
             sb.append("\n").append(label).append("：").append(value);
         }
-    }
-
-    private String buildFollowUpQuestion(List<Map<String, Object>> missingFields) {
-        StringBuilder sb = new StringBuilder("为了给你生成更精准的设计方案，我还需要确认以下信息：\n\n");
-        int i = 1;
-        for (Map<String, Object> field : missingFields) {
-            String question = (String) field.get("question");
-            sb.append(i).append(". ").append(question).append("\n");
-            i++;
-        }
-        sb.append("\n你可以一次性补充所有信息，我会继续分析。");
-        return sb.toString();
     }
 
     private Map<String, Object> parseJson(String json) {

@@ -34,7 +34,8 @@ async def test_text_parser_recognizes_space_type_and_budget(text_parser: TextPar
 
 
 @pytest.mark.asyncio
-async def test_text_parser_returns_clarification_when_missing_required(text_parser: TextParser) -> None:
+async def test_text_parser_omits_clarification_when_missing_required(text_parser: TextParser) -> None:
     data = await text_parser.parse("做个美陈")
-    assert data.get("needs_clarification") is True
-    assert "space_type" in data.get("missing_fields", [])
+    assert "needs_clarification" not in data
+    assert "missing_fields" not in data
+    assert "clarification_question" not in data
