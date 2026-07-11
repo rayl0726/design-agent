@@ -21,6 +21,11 @@ export const thinkingApi = {
   list: (projectId) => request.get(`/projects/${projectId}/thinking-logs`),
 }
 
+export const debugApi = {
+  listIntentTraces: (projectId) => request.get(`/debug/intent-traces/${projectId}`),
+  getIntentTrace: (projectId, traceId) => request.get(`/debug/intent-traces/${projectId}/${traceId}`),
+}
+
 export const feedbackApi = {
   list: (projectId) => request.get(`/projects/${projectId}/feedbacks`),
   create: (projectId, data) => request.post(`/projects/${projectId}/feedbacks`, data),
