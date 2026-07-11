@@ -9,6 +9,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -98,7 +100,7 @@ public class IntentTaxonomyAdminService {
                 }
             }
             if (!found) throw new IllegalArgumentException("Canonical value not found: " + request.correctedValue());
-            yamlMapper.writeValue(file, yaml);
+            writeYamlAtomically(file, yaml);
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {
@@ -126,11 +128,27 @@ public class IntentTaxonomyAdminService {
                 }
             }
             if (!found) throw new IllegalArgumentException("Canonical name not found: " + request.canonicalName());
-            yamlMapper.writeValue(file, yaml);
+            writeYamlAtomically(file, yaml);
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {
             throw new RuntimeException("Failed to add alias: " + e.getMessage(), e);
+        }
+    }
+
+    private void writeYamlAtomically(File file, Object yaml) throws java.io.IOException {
+        File tmp = File.createTempFile("taxonomy", ".yaml", file.getParentFile());
+        try {
+            yamlMapper.writeValue(tmp, yaml);
+            Files.move(tmp.toPath(), file.toPath(),
+                StandardCopyOption.REPLACE_EXISTING,
+                StandardCopyOption.ATOMIC_MOVE);
+        } catch (Exception e) {
+            if (tmp.exists()) {
+                // best-effort cleanup; do not mask the original exception
+                try { tmp.delete(); } catch (Exception ignored) {}
+            }
+            throw e;
         }
     }
 

@@ -7,8 +7,11 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.io.File;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -68,16 +71,22 @@ public class PromptTemplateAdminService {
     }
 
     public PromptPreviewResponseDTO previewPrompt(PromptPreviewRequestDTO request) {
-        return agentCoreClient.post()
-            .uri("/api/v1/prompt-preview")
-            .bodyValue(Map.of(
-                "theme", request.theme() != null ? request.theme() : "",
-                "space_type", request.spaceType() != null ? request.spaceType() : "",
-                "budget_level", request.budgetLevel() != null ? request.budgetLevel() : "medium",
-                "style", request.style() != null ? request.style() : ""
-            ))
-            .retrieve()
-            .bodyToMono(PromptPreviewResponseDTO.class)
-            .block();
+        try {
+            return agentCoreClient.post()
+                .uri("/api/v1/prompt-preview")
+                .bodyValue(Map.of(
+                    "theme", request.theme() != null ? request.theme() : "",
+                    "space_type", request.spaceType() != null ? request.spaceType() : "",
+                    "budget_level", request.budgetLevel() != null ? request.budgetLevel() : "medium",
+                    "style", request.style() != null ? request.style() : ""
+                ))
+                .retrieve()
+                .bodyToMono(PromptPreviewResponseDTO.class)
+                .block(Duration.ofSeconds(30));
+        } catch (WebClientResponseException e) {
+            throw new RuntimeException("Agent-core returned error: " + e.getStatusCode() + " " + e.getResponseBodyAsString(), e);
+        } catch (WebClientRequestException e) {
+            throw new RuntimeException("Failed to reach agent-core: " + e.getMessage(), e);
+        }
     }
 }

@@ -1,9 +1,11 @@
 package com.meichen.admin.service;
 
 import com.meichen.admin.dto.*;
+import com.meichen.admin.entity.StageLogStatsRead;
 import com.meichen.admin.repository.FeedbackReadRepository;
 import com.meichen.admin.repository.ProjectReadRepository;
 import com.meichen.admin.repository.StageLogReadRepository;
+import com.meichen.admin.repository.StageLogStatsReadRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -18,6 +20,7 @@ class MetricsAdminServiceTest {
     private ProjectReadRepository projectRepo;
     private FeedbackReadRepository feedbackRepo;
     private StageLogReadRepository stageLogRepo;
+    private StageLogStatsReadRepository stageLogStatsRepo;
     private MetricsAdminService service;
 
     @BeforeEach
@@ -25,7 +28,8 @@ class MetricsAdminServiceTest {
         projectRepo = mock(ProjectReadRepository.class);
         feedbackRepo = mock(FeedbackReadRepository.class);
         stageLogRepo = mock(StageLogReadRepository.class);
-        service = new MetricsAdminService(projectRepo, feedbackRepo, stageLogRepo);
+        stageLogStatsRepo = mock(StageLogStatsReadRepository.class);
+        service = new MetricsAdminService(projectRepo, feedbackRepo, stageLogRepo, stageLogStatsRepo);
     }
 
     @Test
@@ -49,9 +53,14 @@ class MetricsAdminServiceTest {
 
     @Test
     void getStageDurations_mapsRows() {
-        Object[] row = {"concept_design", 5000.0, 8000.0, 12000L, 5, 1};
-        List<Object[]> rows = Collections.singletonList(row);
-        when(stageLogRepo.aggregateByStageNameSince(any())).thenReturn(rows);
+        StageLogStatsRead stat = mock(StageLogStatsRead.class);
+        when(stat.getStageName()).thenReturn("concept_design");
+        when(stat.getAvgMs()).thenReturn(5000.0);
+        when(stat.getP95Ms()).thenReturn(8000.0);
+        when(stat.getMaxMs()).thenReturn(12000L);
+        when(stat.getSuccessCount()).thenReturn(5);
+        when(stat.getFailedCount()).thenReturn(1);
+        when(stageLogStatsRepo.findByWindowStartAfterOrderByWindowStartDesc(any())).thenReturn(Collections.singletonList(stat));
 
         List<StageDurationDTO> result = service.getStageDurations(24);
 
