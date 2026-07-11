@@ -90,6 +90,9 @@ public class FeedbackRead {
     public void setId(String id) { this.id = id; }
     public void setFeedbackType(String feedbackType) { this.feedbackType = feedbackType; }
     public void setCategory(String category) { this.category = category; }
+    public void setIntentField(String intentField) { this.intentField = intentField; }
+    public void setOriginalValue(String originalValue) { this.originalValue = originalValue; }
+    public void setCorrectedValue(String correctedValue) { this.correctedValue = correctedValue; }
     public void setProcessed(Boolean processed) { this.processed = processed; }
     public void setNotes(String notes) { this.notes = notes; }
 }
