@@ -96,4 +96,24 @@ class DialogueServiceTest {
         String followUp = dialogueService.buildCoreFieldFollowUp(java.util.List.of("budget", "theme"));
         assertThat(followUp).contains("项目预算").contains("主题或概念");
     }
+
+    @Test
+    void findDiscardedFields_identifiesInvalidValues() {
+        Map<String, Object> current = new java.util.HashMap<>();
+        current.put("theme", "，");          // invalid: punctuation-only
+        current.put("space_type", "快闪店"); // valid
+        current.put("budget", 0);            // invalid: Number not > 0
+        current.put("style", "。");          // invalid: punctuation-only
+        Map<String, Object> discarded = dialogueService.findDiscardedFields(current);
+        assertThat(discarded).containsKeys("theme", "budget", "style");
+        assertThat(discarded).doesNotContainKey("space_type");
+        assertThat(discarded.get("theme")).isEqualTo("，");
+    }
+
+    @Test
+    void findDiscardedFields_emptyWhenAllValid() {
+        Map<String, Object> current = Map.of("theme", "圣诞节", "space_type", "快闪店", "budget", 300000);
+        Map<String, Object> discarded = dialogueService.findDiscardedFields(current);
+        assertThat(discarded).isEmpty();
+    }
 }

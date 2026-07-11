@@ -71,7 +71,10 @@ public class DialogueService {
 
             // 1. 文本解析
             pushThinking(projectId, "text_parse", "started");
-            Map<String, Object> textParse = postToAgent("/agents/input-parser/parse-text", Map.of("text", content));
+            Map<String, Object> textParse = postToAgent(
+                "/agents/input-parser/parse-text",
+                Map.of("text", content, "project_id", projectId)
+            );
             log.info("text_parse result: {}", textParse);
             pushThinking(projectId, "text_parse", "completed");
 
@@ -176,6 +179,12 @@ public class DialogueService {
             }
         }
 
+        // Log discarded invalid field values for debug observability
+        Map<String, Object> discarded = findDiscardedFields(current);
+        if (!discarded.isEmpty()) {
+            log.info("discarded invalid field values during merge: {}", discarded);
+        }
+
         // 数组字段：合并去重
         mergeList(merged, current, "material_restrictions");
         mergeList(merged, current, "special_requirements");
@@ -223,6 +232,20 @@ public class DialogueService {
         if (trimmed.matches("^[" + PUNCT_CHARS + "]+$")) return false;
         if (("theme".equals(field) || "space_type".equals(field)) && trimmed.matches("^\\d+$")) return false;
         return true;
+    }
+
+    Map<String, Object> findDiscardedFields(Map<String, Object> current) {
+        Map<String, Object> discarded = new LinkedHashMap<>();
+        if (current == null) return discarded;
+        for (String key : List.of("theme", "style", "space_type", "budget", "budget_level",
+                "target_audience", "timeline", "color_preference", "brand_positioning",
+                "design_system_preference", "space_description")) {
+            Object value = current.get(key);
+            if (value != null && !isValidValue(key, value)) {
+                discarded.put(key, value);
+            }
+        }
+        return discarded;
     }
 
     java.util.List<String> findMissingCoreFields(Map<String, Object> merged) {
