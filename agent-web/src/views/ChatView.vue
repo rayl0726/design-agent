@@ -348,9 +348,9 @@ const loadMessages = async () => {
 }
 
 const loadThinkingLogs = async () => {
+  recognitionSummary.value = null
   if (!sessionId.value) {
     thinkingLogs.value = []
-    recognitionSummary.value = null
     return
   }
   try {
