@@ -20,7 +20,9 @@ spring:
     enabled: true
     baseline-on-migrate: true
   jpa:
-    database-platform: org.hibernate.dialect.MySQLDialect
+    # 不显式指定 database-platform，让 Hibernate 根据 JDBC 连接自动选择方言
+    # （生产 MySQL → MySQLDialect，测试 H2 → H2Dialect）。
+    # 显式指定 MySQLDialect 会导致 @DataJpaTest 切片测试中 H2 无法解析 engine=InnoDB。
     # 目前保留 update，避免已存在的开发环境数据库因 Flyway 初次接管而中断。
     # 后续稳定后建议切换为 validate，让 Flyway 单独负责 schema 变更。
     hibernate:
