@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from unittest.mock import AsyncMock, patch
 
 from app.agents.input_parser import TextParser
 from app.services.intent_llm_extractor import IntentLLMExtractor
@@ -269,3 +270,70 @@ class TestRecognizePassesContext:
         assert result.theme.value == "新春国潮"
         assert result.style is not None
         assert result.style.value == "国潮"
+
+
+class TestTextParserParseWithContext:
+    @pytest.mark.asyncio
+    async def test_parse_passes_all_context_to_recognize(self):
+        parser = TextParser()
+
+        mock_service = AsyncMock()
+        mock_service.recognize = AsyncMock(return_value=ValidatedIntent(
+            space_type=RecognizedField(name="space_type", value="购物中心中庭", source=FieldSource.LLM, confidence=1.0),
+        ))
+
+        with patch.object(parser, "_intent_service", mock_service):
+            await parser.parse(
+                "购物中心中庭",
+                project_id="test-123",
+                previous_intent={"theme": "新春国潮", "style": "国潮"},
+                recent_messages=["新春国潮国潮风格"],
+                conversation_summary="第1轮：主题=新春国潮",
+            )
+
+        mock_service.recognize.assert_called_once()
+        call_kwargs = mock_service.recognize.call_args.kwargs
+        assert call_kwargs["text"] == "购物中心中庭"
+        assert call_kwargs["project_id"] == "test-123"
+        assert call_kwargs["previous_intent"] is not None
+        assert call_kwargs["previous_intent"].theme.value == "新春国潮"
+        assert call_kwargs["recent_messages"] == ["新春国潮国潮风格"]
+        assert call_kwargs["conversation_summary"] == "第1轮：主题=新春国潮"
+
+    @pytest.mark.asyncio
+    async def test_parse_without_context_still_works(self):
+        parser = TextParser()
+
+        mock_service = AsyncMock()
+        mock_service.recognize = AsyncMock(return_value=ValidatedIntent(
+            space_type=RecognizedField(name="space_type", value="快闪店", source=FieldSource.LLM, confidence=1.0),
+        ))
+
+        with patch.object(parser, "_intent_service", mock_service):
+            result = await parser.parse("快闪店")
+
+        mock_service.recognize.assert_called_once()
+        call_kwargs = mock_service.recognize.call_args.kwargs
+        assert call_kwargs["previous_intent"] is None
+        assert call_kwargs["recent_messages"] is None
+        assert call_kwargs["conversation_summary"] == ""
+        assert result["space_type"] == "快闪店"
+
+    @pytest.mark.asyncio
+    async def test_parse_with_invalid_previous_intent_degrades_gracefully(self):
+        parser = TextParser()
+
+        mock_service = AsyncMock()
+        mock_service.recognize = AsyncMock(return_value=ValidatedIntent(
+            space_type=RecognizedField(name="space_type", value="快闪店", source=FieldSource.LLM, confidence=1.0),
+        ))
+
+        with patch.object(parser, "_intent_service", mock_service):
+            await parser.parse(
+                "快闪店",
+                previous_intent={"invalid": "data"},
+            )
+
+        call_kwargs = mock_service.recognize.call_args.kwargs
+        # 无效的 previous_intent 转换后为 None，不阻断流程
+        assert call_kwargs["previous_intent"] is None

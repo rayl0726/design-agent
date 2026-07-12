@@ -42,7 +42,14 @@ async def test_parse_text_passes_project_id_to_recognize(monkeypatch):
     captured_project_id = {}
 
     class StubService:
-        async def recognize(self, text, previous_intent=None, project_id=None):
+        async def recognize(
+            self,
+            text,
+            previous_intent=None,
+            project_id=None,
+            recent_messages=None,
+            conversation_summary: str = "",
+        ):
             captured_project_id["value"] = project_id
             from app.services.intent_recognition_result import ValidatedIntent
             return ValidatedIntent(raw_text=text)
@@ -63,7 +70,14 @@ async def test_parse_text_returns_enriched_recognition_meta(monkeypatch):
     )
 
     class StubService:
-        async def recognize(self, text, previous_intent=None, project_id=None):
+        async def recognize(
+            self,
+            text,
+            previous_intent=None,
+            project_id=None,
+            recent_messages=None,
+            conversation_summary: str = "",
+        ):
             return ValidatedIntent(
                 raw_text=text,
                 theme=RecognizedField(name="theme", value="圣诞节", source=FieldSource.LLM, confidence=0.85, raw_text="圣诞节"),

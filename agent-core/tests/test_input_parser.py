@@ -9,7 +9,14 @@ from app.services.intent_recognition_result import (
 
 
 class FakeIntentRecognitionService:
-    async def recognize(self, text: str, previous_intent=None, project_id=None) -> ValidatedIntent:
+    async def recognize(
+        self,
+        text: str,
+        previous_intent=None,
+        project_id=None,
+        recent_messages=None,
+        conversation_summary: str = "",
+    ) -> ValidatedIntent:
         return ValidatedIntent(
             theme=RecognizedField(name="theme", value="情人节", source="llm", confidence=0.9),
             clarification=ClarificationRequest(

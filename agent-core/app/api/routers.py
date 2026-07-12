@@ -78,8 +78,17 @@ async def parse_reference(payload: dict = None):
 async def parse_text(payload: dict):
     text = payload.get("text", "")
     project_id = payload.get("project_id")
+    previous_intent = payload.get("previous_intent")
+    recent_messages = payload.get("recent_messages")
+    conversation_summary = payload.get("conversation_summary", "")
     parser = TextParser()
-    return await parser.parse(text, project_id=project_id)
+    return await parser.parse(
+        text,
+        project_id=project_id,
+        previous_intent=previous_intent,
+        recent_messages=recent_messages,
+        conversation_summary=conversation_summary,
+    )
 
 
 @router.post("/agents/input-parser/merge")

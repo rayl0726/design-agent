@@ -154,14 +154,36 @@ class TextParser:
 
     _intent_service = None
 
-    async def parse(self, text: str, project_id: str | None = None) -> dict[str, Any]:
+    async def parse(
+        self,
+        text: str,
+        project_id: str | None = None,
+        previous_intent: dict | None = None,
+        recent_messages: list[str] | None = None,
+        conversation_summary: str = "",
+    ) -> dict[str, Any]:
         from app.core.config import settings
 
         if getattr(settings, "intent_parser_legacy", False):
             return self._get_fallback_parse(text)
 
         service = self._intent_service or get_intent_service()
-        result = await service.recognize(text, project_id=project_id)
+
+        prev_validated = None
+        if previous_intent:
+            try:
+                prev_validated = self._dict_to_validated_intent(previous_intent)
+            except Exception as e:
+                print(f"TextParser.parse: _dict_to_validated_intent failed (non-fatal): {type(e).__name__}: {e}")
+                prev_validated = None
+
+        result = await service.recognize(
+            text=text,
+            previous_intent=prev_validated,
+            project_id=project_id,
+            recent_messages=recent_messages,
+            conversation_summary=conversation_summary,
+        )
         return self._validated_intent_to_dict(result)
 
     def _validated_intent_to_dict(self, result) -> dict[str, Any]:
