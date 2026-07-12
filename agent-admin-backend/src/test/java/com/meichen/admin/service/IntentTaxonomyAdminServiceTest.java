@@ -27,11 +27,14 @@ class IntentTaxonomyAdminServiceTest {
         feedbackRepo = mock(FeedbackReadRepository.class);
         File taxonomyFile = new File(tempDir, "intent_taxonomy.yaml");
         Files.writeString(taxonomyFile.toPath(),
+            "# Intent taxonomy configuration\n" +
             "version: \"1.0\"\n" +
             "space_types:\n" +
+            "  # Shopping mall atrium\n" +
             "  - name: \"购物中心中庭\"\n" +
             "    aliases: [\"商场中庭\", \"中庭\"]\n" +
             "styles:\n" +
+            "  # Modern style\n" +
             "  - name: \"现代\"\n" +
             "    aliases: [\"modern\"]\n"
         );
@@ -113,5 +116,26 @@ class IntentTaxonomyAdminServiceTest {
         } catch (IllegalArgumentException e) {
             assertThat(e.getMessage()).contains("Canonical name not found");
         }
+    }
+
+    @Test
+    void addAlias_preservesCommentsAndFormatting() throws Exception {
+        service.addAlias(new AddAliasRequestDTO("styles", "现代", "modern2"));
+
+        String content = Files.readString(new File(tempDir, "intent_taxonomy.yaml").toPath());
+        assertThat(content).contains("# Intent taxonomy configuration");
+        assertThat(content).contains("# Modern style");
+        assertThat(content).contains("modern2");
+        assertThat(content).contains("aliases: [\"modern\", \"modern2\"]");
+    }
+
+    @Test
+    void applyAlias_preservesCommentsAndFormatting() throws Exception {
+        service.applyAlias(new ApplyAliasRequestDTO("space_type", "商厦中庭", "购物中心中庭"));
+
+        String content = Files.readString(new File(tempDir, "intent_taxonomy.yaml").toPath());
+        assertThat(content).contains("# Intent taxonomy configuration");
+        assertThat(content).contains("# Shopping mall atrium");
+        assertThat(content).contains("商厦中庭");
     }
 }

@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
@@ -85,25 +86,9 @@ public class IntentTaxonomyAdminService {
     @SuppressWarnings("unchecked")
     public void applyAlias(ApplyAliasRequestDTO request) {
         File file = new File(dataDir, "intent_taxonomy.yaml");
+        String sectionKey = mapFieldToSection(request.intentField());
         try {
-            Map<String, Object> yaml = yamlMapper.readValue(file, Map.class);
-            String sectionKey = mapFieldToSection(request.intentField());
-            List<Map<String, Object>> entries = (List<Map<String, Object>>) yaml.get(sectionKey);
-            if (entries == null) throw new IllegalArgumentException("Unknown section: " + sectionKey);
-            boolean found = false;
-            for (Map<String, Object> entry : entries) {
-                if (request.correctedValue().equals(entry.get("name"))) {
-                    List<String> aliases = (List<String>) entry.getOrDefault("aliases", new ArrayList<>());
-                    if (!aliases.contains(request.originalValue())) {
-                        aliases.add(request.originalValue());
-                        entry.put("aliases", aliases);
-                    }
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) throw new IllegalArgumentException("Canonical value not found: " + request.correctedValue());
-            writeYamlAtomically(file, yaml);
+            appendAliasToFile(file, sectionKey, request.correctedValue(), request.originalValue());
             auditLogService.recordSuccess("APPLY_ALIAS",
                 request.intentField(),
                 "original=" + request.originalValue() + " corrected=" + request.correctedValue());
@@ -120,23 +105,7 @@ public class IntentTaxonomyAdminService {
     public void addAlias(AddAliasRequestDTO request) {
         File file = new File(dataDir, "intent_taxonomy.yaml");
         try {
-            Map<String, Object> yaml = yamlMapper.readValue(file, Map.class);
-            List<Map<String, Object>> entries = (List<Map<String, Object>>) yaml.get(request.section());
-            if (entries == null) throw new IllegalArgumentException("Unknown section: " + request.section());
-            boolean found = false;
-            for (Map<String, Object> entry : entries) {
-                if (request.canonicalName().equals(entry.get("name"))) {
-                    List<String> aliases = (List<String>) entry.getOrDefault("aliases", new ArrayList<>());
-                    if (!aliases.contains(request.alias())) {
-                        aliases.add(request.alias());
-                        entry.put("aliases", aliases);
-                    }
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) throw new IllegalArgumentException("Canonical name not found: " + request.canonicalName());
-            writeYamlAtomically(file, yaml);
+            appendAliasToFile(file, request.section(), request.canonicalName(), request.alias());
             auditLogService.recordSuccess("ADD_ALIAS",
                 request.section(),
                 "canonical=" + request.canonicalName() + " alias=" + request.alias());
@@ -147,6 +116,79 @@ public class IntentTaxonomyAdminService {
             auditLogService.recordFailure("ADD_ALIAS", request.section(), e.getMessage());
             throw new RuntimeException("Failed to add alias: " + e.getMessage(), e);
         }
+    }
+
+    private void appendAliasToFile(File file, String section, String canonicalName, String alias) throws IOException {
+        List<String> lines = new ArrayList<>(Files.readAllLines(file.toPath()));
+        String sectionHeader = section + ":";
+        boolean inSection = false;
+        boolean inTarget = false;
+        boolean aliasExists = false;
+        boolean foundInline = false;
+
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            String trimmed = line.trim();
+
+            if (!line.startsWith(" ") && !line.startsWith("#") && !line.startsWith("-")
+                && !trimmed.isEmpty() && trimmed.endsWith(":")) {
+                inSection = trimmed.equals(sectionHeader);
+                inTarget = false;
+                continue;
+            }
+
+            if (!inSection) continue;
+
+            if ((trimmed.startsWith("name:") || trimmed.startsWith("- name:"))
+                && trimmed.contains("\"" + canonicalName + "\"")) {
+                inTarget = true;
+                continue;
+            }
+
+            if (inTarget && trimmed.startsWith("aliases:")) {
+                if (trimmed.contains("\"" + alias + "\"")) {
+                    aliasExists = true;
+                } else if (trimmed.equals("aliases: []")) {
+                    lines.set(i, line.replace("[]", "[\"" + alias + "\"]"));
+                    foundInline = true;
+                } else if (trimmed.contains("[") && trimmed.endsWith("]")) {
+                    lines.set(i, line.replaceFirst("\\]$", ", \"" + alias + "\"]"));
+                    foundInline = true;
+                }
+                break;
+            }
+        }
+
+        if (!inTarget) {
+            throw new IllegalArgumentException("Canonical name not found: " + canonicalName);
+        }
+
+        if (!aliasExists && foundInline) {
+            Files.write(file.toPath(), lines);
+        } else if (!aliasExists) {
+            fallbackAppendAlias(file, section, canonicalName, alias);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void fallbackAppendAlias(File file, String section, String canonicalName, String alias) throws IOException {
+        Map<String, Object> yaml = yamlMapper.readValue(file, Map.class);
+        List<Map<String, Object>> entries = (List<Map<String, Object>>) yaml.get(section);
+        if (entries == null) throw new IllegalArgumentException("Unknown section: " + section);
+        boolean found = false;
+        for (Map<String, Object> entry : entries) {
+            if (canonicalName.equals(entry.get("name"))) {
+                List<String> aliases = (List<String>) entry.getOrDefault("aliases", new ArrayList<>());
+                if (!aliases.contains(alias)) {
+                    aliases.add(alias);
+                    entry.put("aliases", aliases);
+                }
+                found = true;
+                break;
+            }
+        }
+        if (!found) throw new IllegalArgumentException("Canonical name not found: " + canonicalName);
+        writeYamlAtomically(file, yaml);
     }
 
     private void writeYamlAtomically(File file, Object yaml) throws java.io.IOException {
