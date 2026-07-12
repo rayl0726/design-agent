@@ -12,6 +12,8 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+_pending_tasks: set = set()
+
 
 async def _send_log(**kwargs: Any) -> None:
     """Send a log record to agent-api internal endpoint. Swallows all errors."""
@@ -88,7 +90,9 @@ def log_ai_call(call_type: str, provider: str):
                     log_payload["node_name"] = node_name
 
                 try:
-                    asyncio.create_task(_send_log(**log_payload))
+                    task = asyncio.create_task(_send_log(**log_payload))
+                    _pending_tasks.add(task)
+                    task.add_done_callback(_pending_tasks.discard)
                 except RuntimeError:
                     pass
 

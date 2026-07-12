@@ -98,6 +98,7 @@ class ZhipuVLMClient(BaseVLMClient):
         prompt: str = "请详细描述这张图片中的场景、物体、颜色、材质和空间布局。",
         json_mode: bool = False,
     ) -> str:
+        self._last_usage = None
         image_b64 = self._encode_image(image_path)
         payload: dict = {
             "model": self.model,
