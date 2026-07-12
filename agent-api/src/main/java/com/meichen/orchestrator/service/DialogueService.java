@@ -69,17 +69,37 @@ public class DialogueService {
                 return;
             }
 
-            // 1. 文本解析
+            // 1. 文本解析（传入上下文：已识别需求 + 最近对话 + 历史摘要）
             pushThinking(projectId, "text_parse", "started");
-            Map<String, Object> textParse = postToAgent(
-                "/agents/input-parser/parse-text",
-                Map.of("text", content, "project_id", projectId)
-            );
+            Map<String, Object> existingReq = parseJson(project.getRequirementJson());
+            Map<String, Object> previousIntent = extractPreviousIntent(existingReq);
+            List<String> recentMessages = getRecentUserMessages(projectId, userId, 3, content);
+            @SuppressWarnings("unchecked")
+            List<Object> rawInputs = (List<Object>) existingReq.getOrDefault("raw_inputs", Collections.emptyList());
+            String conversationSummary = generateConversationSummary(rawInputs);
+
+            Map<String, Object> parseRequest = new HashMap<>();
+            parseRequest.put("text", content);
+            parseRequest.put("project_id", projectId);
+            if (!previousIntent.isEmpty()) {
+                parseRequest.put("previous_intent", previousIntent);
+            }
+            if (!recentMessages.isEmpty()) {
+                parseRequest.put("recent_messages", recentMessages);
+            }
+            if (!conversationSummary.isEmpty()) {
+                parseRequest.put("conversation_summary", conversationSummary);
+            }
+            log.info("text_parse context: previous_intent_keys={}, recent_messages_count={}, summary_lines={}",
+                previousIntent.keySet(), recentMessages.size(),
+                conversationSummary.isEmpty() ? 0 : conversationSummary.split("\n").length);
+
+            Map<String, Object> textParse = postToAgent("/agents/input-parser/parse-text", parseRequest);
             log.info("text_parse result: {}", textParse);
             pushThinking(projectId, "text_parse", "completed");
 
             // 2. 与历史需求合并（含有效性校验，丢弃垃圾值）
-            Map<String, Object> existingRequirement = parseJson(project.getRequirementJson());
+            Map<String, Object> existingRequirement = existingReq;
             Map<String, Object> merged = mergeRequirements(existingRequirement, textParse);
             log.info("merged requirement: {}", merged);
             project.setRequirementJson(toJson(merged));
@@ -253,6 +273,102 @@ public class DialogueService {
             }
         }
         return discarded;
+    }
+
+    private static final Set<String> INTERNAL_FIELDS = Set.of(
+        "raw_inputs", "_recognition_meta", "trace_id", "source_type",
+        "space_description", "color_palette", "material_suggestions",
+        "mood_keywords", "design_direction", "spatial_notes",
+        "risk_hints", "constraints", "conflicts", "needs_confirmation",
+        "missing_fields", "is_complete", "needs_clarification",
+        "clarification_question", "low_confidence_fields", "references"
+    );
+
+    private static final Set<String> CONTEXT_FIELDS = Set.of(
+        "theme", "style", "space_type", "budget", "budget_level",
+        "target_audience", "timeline", "color_preference", "brand_positioning",
+        "design_system_preference", "material_restrictions", "allowed_materials",
+        "special_requirements", "points"
+    );
+
+    Map<String, Object> extractPreviousIntent(Map<String, Object> requirementJson) {
+        if (requirementJson == null || requirementJson.isEmpty()) {
+            return new HashMap<>();
+        }
+        Map<String, Object> result = new HashMap<>();
+        for (String key : CONTEXT_FIELDS) {
+            Object value = requirementJson.get(key);
+            if (value != null) {
+                if (value instanceof String s && s.isBlank()) {
+                    continue;
+                }
+                if (value instanceof Collection<?> c && c.isEmpty()) {
+                    continue;
+                }
+                result.put(key, value);
+            }
+        }
+        return result;
+    }
+
+    List<String> getRecentUserMessages(String projectId, Long userId, int limit, String excludeContent) {
+        try {
+            List<SessionMessage> messages = sessionMessageService.listMessages(projectId, userId);
+            List<String> userMessages = new ArrayList<>();
+            // 从最新到最旧遍历，跳过当前轮的消息
+            for (int i = messages.size() - 1; i >= 0 && userMessages.size() < limit; i--) {
+                SessionMessage msg = messages.get(i);
+                if ("user".equals(msg.getRole()) && !msg.getContent().equals(excludeContent)) {
+                    String content = msg.getContent();
+                    if (content.length() > 200) {
+                        content = content.substring(0, 200);
+                    }
+                    userMessages.add(content);
+                }
+            }
+            // 反转为时间正序
+            Collections.reverse(userMessages);
+            return userMessages;
+        } catch (Exception e) {
+            log.warn("Failed to retrieve recent user messages for project {}: {} — {}",
+                projectId, e.getClass().getName(), e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    String generateConversationSummary(List<Object> rawInputs) {
+        if (rawInputs == null || rawInputs.size() <= 3) {
+            return "";
+        }
+        try {
+            List<String> lines = new ArrayList<>();
+            int startIdx = Math.max(0, rawInputs.size() - 50);
+            for (int i = startIdx; i < rawInputs.size(); i++) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> input = (Map<String, Object>) rawInputs.get(i);
+                if (input == null) continue;
+                List<String> parts = new ArrayList<>();
+                addSummaryField(parts, input, "theme", "主题");
+                addSummaryField(parts, input, "style", "风格");
+                addSummaryField(parts, input, "space_type", "空间类型");
+                addSummaryField(parts, input, "budget", "预算");
+                if (!parts.isEmpty()) {
+                    lines.add("第" + (i + 1) + "轮：" + String.join("，", parts));
+                }
+            }
+            return String.join("\n", lines);
+        } catch (Exception e) {
+            log.warn("Failed to generate conversation summary: {} — {}", e.getClass().getName(), e.getMessage());
+            return "";
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void addSummaryField(List<String> parts, Map<String, Object> input, String key, String label) {
+        Object value = input.get(key);
+        if (value != null && !(value instanceof String s && s.isBlank())) {
+            parts.add(label + "=" + value);
+        }
     }
 
     java.util.List<String> findMissingCoreFields(Map<String, Object> merged) {
