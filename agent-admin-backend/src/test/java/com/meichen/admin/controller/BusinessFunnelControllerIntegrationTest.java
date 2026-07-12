@@ -63,4 +63,23 @@ class BusinessFunnelControllerIntegrationTest {
         mockMvc.perform(get("/api/admin/metrics/funnel"))
             .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    void getLevels_returnsLevelDistribution() throws Exception {
+        mockMvc.perform(get("/api/admin/metrics/funnel/levels")
+                .header("X-Admin-Token", "test-token"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isArray())
+            .andExpect(jsonPath("$[0].level").value("L1"))
+            .andExpect(jsonPath("$[0].count").value(1));
+    }
+
+    @Test
+    void getDuration_returnsStats() throws Exception {
+        mockMvc.perform(get("/api/admin/metrics/funnel/duration")
+                .param("days", "30")
+                .header("X-Admin-Token", "test-token"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.avgDurationHours").exists());
+    }
 }

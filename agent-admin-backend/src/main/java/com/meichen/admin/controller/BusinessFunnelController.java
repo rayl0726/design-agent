@@ -28,4 +28,15 @@ public class BusinessFunnelController {
             @RequestParam(defaultValue = "7") int days) {
         return ResponseEntity.ok(service.getAbandonment(days));
     }
+
+    @GetMapping("/funnel/levels")
+    public ResponseEntity<List<LevelDistributionDTO>> getLevels() {
+        return ResponseEntity.ok(service.getLevelDistribution());
+    }
+
+    @GetMapping("/funnel/duration")
+    public ResponseEntity<ProjectDurationDTO> getDuration(
+            @RequestParam(defaultValue = "30") int days) {
+        return ResponseEntity.ok(service.getDuration(days));
+    }
 }

@@ -42,4 +42,34 @@ public class BusinessFunnelService {
             Duration.between(p.getCreatedAt(), LocalDateTime.now()).toDays()
         )).toList();
     }
+
+    public List<LevelDistributionDTO> getLevelDistribution() {
+        long l1 = projectRepo.countByCurrentLevel("L1");
+        long l2 = projectRepo.countByCurrentLevel("L2");
+        long l3 = projectRepo.countByCurrentLevel("L3");
+        long total = l1 + l2 + l3;
+
+        return List.of(
+            new LevelDistributionDTO("L1", l1, total > 0 ? (double) l1 / total * 100 : 0),
+            new LevelDistributionDTO("L2", l2, total > 0 ? (double) l2 / total * 100 : 0),
+            new LevelDistributionDTO("L3", l3, total > 0 ? (double) l3 / total * 100 : 0)
+        );
+    }
+
+    public ProjectDurationDTO getDuration(int days) {
+        LocalDateTime since = LocalDateTime.now().minusDays(days);
+        List<ProjectRead> completed = projectRepo.findByStatusAndCreatedAtAfter("completed", since);
+        if (completed.isEmpty()) {
+            return new ProjectDurationDTO(0, 0, 0, 0, 0);
+        }
+        List<Double> durations = completed.stream()
+            .map(p -> (double) Duration.between(p.getCreatedAt(), LocalDateTime.now()).toHours())
+            .sorted()
+            .toList();
+        double avg = durations.stream().mapToDouble(d -> d).average().orElse(0);
+        double median = durations.get(durations.size() / 2);
+        double p90 = durations.get((int) (durations.size() * 0.9));
+        double max = durations.stream().mapToDouble(d -> d).max().orElse(0);
+        return new ProjectDurationDTO(avg, median, p90, max, completed.size());
+    }
 }

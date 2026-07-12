@@ -21,4 +21,8 @@ public interface ProjectReadRepository extends JpaRepository<ProjectRead, String
 
     @Query("SELECT p FROM ProjectRead p WHERE p.status = 'draft' AND p.createdAt < :cutoff")
     List<ProjectRead> findAbandonedDrafts(@Param("cutoff") LocalDateTime cutoff);
+
+    long countByCurrentLevel(String currentLevel);
+
+    List<ProjectRead> findByStatusAndCreatedAtAfter(String status, LocalDateTime createdAt);
 }
