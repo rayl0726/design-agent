@@ -1,0 +1,23 @@
+server:
+  port: 8081
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/meichen
+    username: meichen
+    password: meichen123
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: false
+
+admin:
+  token: ${ADMIN_TOKEN:admin-secret-2026}
+  agent-core:
+    base-url: http://localhost:8000
+    data-dir: ${AGENT_CORE_DATA_DIR:/Users/liulei/private-work/design-agent/agent-core/data}

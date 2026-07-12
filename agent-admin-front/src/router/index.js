@@ -1,0 +1,43 @@
+import { createRouter, createWebHistory } from 'vue-router'
+import AdminLayout from '../layouts/AdminLayout.vue'
+
+const routes = [
+  {
+    path: '/',
+    component: AdminLayout,
+    redirect: '/dashboard',
+    children: [
+      {
+        path: 'dashboard',
+        name: 'Dashboard',
+        component: () => import('../views/Dashboard.vue'),
+        meta: { title: '指标看板', icon: 'Odometer' }
+      },
+      {
+        path: 'feedbacks',
+        name: 'FeedbackList',
+        component: () => import('../views/FeedbackList.vue'),
+        meta: { title: '反馈管理', icon: 'ChatDotRound' }
+      },
+      {
+        path: 'prompt-templates',
+        name: 'PromptTemplates',
+        component: () => import('../views/PromptTemplates.vue'),
+        meta: { title: 'Prompt 模板', icon: 'Document' }
+      },
+      {
+        path: 'intent-taxonomy',
+        name: 'IntentTaxonomy',
+        component: () => import('../views/IntentTaxonomy.vue'),
+        meta: { title: '意图词库', icon: 'Collection' }
+      }
+    ]
+  }
+]
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes
+})
+
+export default router
