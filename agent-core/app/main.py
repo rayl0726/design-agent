@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 
+import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
@@ -9,10 +10,15 @@ from fastapi.staticfiles import StaticFiles
 from app.api.routers import router as api_router
 from app.core.config import settings
 from app.models.database import init_db
+from app.services.rag_logger import set_main_loop
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Capture the main event loop so sync code running in thread pool threads
+    # (e.g. knowledge_base.structured_query via run_in_executor) can schedule
+    # fire-and-forget log coroutines via run_coroutine_threadsafe.
+    set_main_loop(asyncio.get_running_loop())
     init_db()
     yield
 

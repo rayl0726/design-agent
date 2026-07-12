@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import time
 from typing import Any
 
@@ -8,7 +7,7 @@ from app.core.config import settings
 from app.models.database import get_session
 from app.models.project import DesignCase, MaterialPrice
 from app.services.embedding_client import embedding_client
-from app.services.rag_logger import log_rag_search
+from app.services.rag_logger import log_rag_search, log_rag_search_sync
 
 
 class KnowledgeBase:
@@ -245,23 +244,19 @@ class KnowledgeBase:
                 for r in rows
             ]
             duration_ms = int((time.monotonic() - start) * 1000)
-            # Fire-and-forget logging. structured_query is sync, so schedule the
-            # async log_rag_search coroutine on the running event loop if there
-            # is one; if no loop is running, swallow the RuntimeError.
-            try:
-                asyncio.create_task(
-                    log_rag_search(
-                        project_id=project_id,
-                        query_text=material_name or "",
-                        search_type="structured",
-                        result_count=len(results),
-                        duration_ms=duration_ms,
-                        cache_hit=False,
-                        timed_out=False,
-                    )
-                )
-            except RuntimeError:
-                pass
+            # Fire-and-forget logging. structured_query is sync and may be
+            # called from either an async context or a thread pool thread
+            # (via loop.run_in_executor in knowledge_retrieval.py), so use the
+            # sync wrapper that handles both cases.
+            log_rag_search_sync(
+                project_id=project_id,
+                query_text=material_name or category or "structured_query",
+                search_type="structured",
+                result_count=len(results),
+                duration_ms=duration_ms,
+                cache_hit=False,
+                timed_out=False,
+            )
             return results
         finally:
             db.close()
