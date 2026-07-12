@@ -27,4 +27,11 @@ public interface ProjectReadRepository extends JpaRepository<ProjectRead, String
     List<ProjectRead> findByStatusAndCreatedAtAfter(String status, LocalDateTime createdAt);
 
     List<ProjectRead> findByCreatedAtAfter(LocalDateTime createdAt);
+
+    long countByCreatedAtAfter(LocalDateTime createdAt);
+
+    long countByCreatedAtBefore(LocalDateTime createdAt);
+
+    @Query("SELECT CAST(p.createdAt AS date), COUNT(p) FROM ProjectRead p WHERE p.createdAt >= :since GROUP BY CAST(p.createdAt AS date) ORDER BY CAST(p.createdAt AS date)")
+    List<Object[]> countByDate(@Param("since") LocalDateTime since);
 }

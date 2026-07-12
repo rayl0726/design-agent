@@ -6,5 +6,7 @@ public record MetricsOverviewDTO(
     long imageFeedbackCount,
     long intentCorrectionCount,
     long stageLogCount,
-    long projectsWithFeedbackCount
+    long projectsWithFeedbackCount,
+    long activeProjectsInWindow,
+    long completedProjectsInWindow
 ) {}

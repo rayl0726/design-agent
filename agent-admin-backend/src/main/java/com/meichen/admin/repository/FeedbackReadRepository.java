@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public interface FeedbackReadRepository extends JpaRepository<FeedbackRead, String> {
@@ -37,6 +38,11 @@ public interface FeedbackReadRepository extends JpaRepository<FeedbackRead, Stri
     List<Object[]> countByTagAndType();
 
     long countByFeedbackType(String feedbackType);
+
+    long countByCreatedAtBefore(LocalDateTime createdAt);
+
+    @Query("SELECT CAST(f.createdAt AS date), COUNT(f) FROM FeedbackRead f WHERE f.createdAt >= :since GROUP BY CAST(f.createdAt AS date) ORDER BY CAST(f.createdAt AS date)")
+    List<Object[]> countByDate(@Param("since") LocalDateTime since);
 
     @Query("SELECT f FROM FeedbackRead f WHERE f.feedbackType = 'intent' AND f.processed = false " +
            "ORDER BY f.createdAt DESC")

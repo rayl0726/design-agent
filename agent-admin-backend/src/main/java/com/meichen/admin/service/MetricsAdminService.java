@@ -30,13 +30,31 @@ public class MetricsAdminService {
     }
 
     public MetricsOverviewDTO getOverview() {
+        return getOverview(0);
+    }
+
+    public MetricsOverviewDTO getOverview(int hours) {
+        if (hours <= 0) {
+            return new MetricsOverviewDTO(
+                projectRepo.count(),
+                feedbackRepo.count(),
+                feedbackRepo.countByFeedbackType("image"),
+                feedbackRepo.countByFeedbackType("intent"),
+                stageLogRepo.count(),
+                projectRepo.countProjectsWithFeedback(),
+                0, 0
+            );
+        }
+        LocalDateTime since = LocalDateTime.now().minusHours(hours);
         return new MetricsOverviewDTO(
             projectRepo.count(),
             feedbackRepo.count(),
             feedbackRepo.countByFeedbackType("image"),
             feedbackRepo.countByFeedbackType("intent"),
             stageLogRepo.count(),
-            projectRepo.countProjectsWithFeedback()
+            projectRepo.countProjectsWithFeedback(),
+            projectRepo.countByCreatedAtAfter(since),
+            projectRepo.countByStatusAndCreatedAtAfter("completed", since)
         );
     }
 
