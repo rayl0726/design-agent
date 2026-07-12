@@ -71,7 +71,8 @@ const menuItems = [
   { path: '/intent-taxonomy', title: '意图词库', icon: 'Collection' },
   { path: '/ai-monitoring', title: 'AI 模型监控', icon: 'Monitor' },
   { path: '/system-health', title: '系统健康', icon: 'Cpu' },
-  { path: '/intent-quality', title: '意图质量', icon: 'Aim' }
+  { path: '/intent-quality', title: '意图质量', icon: 'Aim' },
+  { path: '/image-gen-monitoring', title: '图像生成监控', icon: 'PictureFilled' }
 ]
 
 const activeMenu = computed(() => route.path)

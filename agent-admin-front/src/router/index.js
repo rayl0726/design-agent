@@ -48,6 +48,12 @@ const routes = [
         name: 'IntentQuality',
         component: () => import('../views/IntentQuality.vue'),
         meta: { title: '意图质量', icon: 'Aim' }
+      },
+      {
+        path: 'image-gen-monitoring',
+        name: 'ImageGenMonitoring',
+        component: () => import('../views/ImageGenMonitoring.vue'),
+        meta: { title: '图像生成监控', icon: 'PictureFilled' }
       }
     ]
   }
