@@ -188,6 +188,108 @@ class TextParser:
         }
         return data
 
+    def _dict_to_validated_intent(self, data: dict | None) -> ValidatedIntent | None:
+        """将 Java 传来的简单 dict 转换为 ValidatedIntent 对象。"""
+        if not data:
+            return None
+
+        from app.services.intent_recognition_result import (
+            ValidatedIntent,
+            RecognizedField,
+            FieldSource,
+        )
+
+        def _field(name: str, value) -> RecognizedField | None:
+            if value is None:
+                return None
+            if isinstance(value, str) and not value.strip():
+                return None
+            return RecognizedField(
+                name=name,
+                value=value,
+                source=FieldSource.UNKNOWN,
+                confidence=1.0,
+            )
+
+        def _list_fields(name: str, values) -> list[RecognizedField]:
+            if not values or not isinstance(values, list):
+                return []
+            return [
+                RecognizedField(name=name, value=v, source=FieldSource.UNKNOWN, confidence=1.0)
+                for v in values
+                if v is not None and (not isinstance(v, str) or v.strip())
+            ]
+
+        def _point_fields(points_data) -> list[RecognizedField]:
+            if not points_data or not isinstance(points_data, list):
+                return []
+            result = []
+            for p in points_data:
+                if isinstance(p, dict):
+                    name = p.get("name", "")
+                    if name and name.strip():
+                        result.append(
+                            RecognizedField(
+                                name="points",
+                                value=name.strip(),
+                                source=FieldSource.UNKNOWN,
+                                confidence=1.0,
+                            )
+                        )
+                elif isinstance(p, str) and p.strip():
+                    result.append(
+                        RecognizedField(
+                            name="points",
+                            value=p.strip(),
+                            source=FieldSource.UNKNOWN,
+                            confidence=1.0,
+                        )
+                    )
+            return result
+
+        intent = ValidatedIntent(
+            theme=_field("theme", data.get("theme")),
+            style=_field("style", data.get("style")),
+            space_type=_field("space_type", data.get("space_type")),
+            budget=_field("budget", data.get("budget")),
+            budget_level=_field("budget_level", data.get("budget_level")),
+            target_audience=_field("target_audience", data.get("target_audience")),
+            timeline=_field("timeline", data.get("timeline")),
+            color_preference=_field("color_preference", data.get("color_preference")),
+            brand_positioning=_field("brand_positioning", data.get("brand_positioning")),
+            design_system_preference=_field(
+                "design_system_preference", data.get("design_system_preference")
+            ),
+            material_restrictions=_list_fields(
+                "material_restrictions", data.get("material_restrictions")
+            ),
+            allowed_materials=_list_fields(
+                "allowed_materials", data.get("allowed_materials")
+            ),
+            special_requirements=_list_fields(
+                "special_requirements", data.get("special_requirements")
+            ),
+            points=_point_fields(data.get("points")),
+        )
+
+        # 检查是否有任何非空字段
+        has_value = any(
+            getattr(intent, f) is not None
+            for f in (
+                "theme", "style", "space_type", "budget", "budget_level",
+                "target_audience", "timeline", "color_preference",
+                "brand_positioning", "design_system_preference",
+            )
+        ) or any(
+            key in data
+            for key in (
+                "material_restrictions", "allowed_materials",
+                "special_requirements", "points",
+            )
+        )
+
+        return intent if has_value else None
+
     def _build_recognition_meta(self, result) -> dict[str, Any]:
         """Extract source/confidence/raw_text for all core fields for debug observability."""
         meta: dict[str, Any] = {"trace_id": result.trace_id}
