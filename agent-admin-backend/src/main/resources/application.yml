@@ -21,3 +21,5 @@ admin:
   agent-core:
     base-url: http://localhost:8000
     data-dir: ${AGENT_CORE_DATA_DIR:/Users/liulei/private-work/design-agent/agent-core/data}
+  agent-api:
+    base-url: ${AGENT_API_BASE_URL:http://localhost:8080}

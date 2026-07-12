@@ -46,4 +46,14 @@ public class SystemHealthController {
             @RequestParam(defaultValue = "1") int hours) {
         return ResponseEntity.ok(service.getHttpMetrics(hours));
     }
+
+    @GetMapping("/thread-pools")
+    public ResponseEntity<List<ThreadPoolMetricsDTO>> getThreadPools() {
+        return ResponseEntity.ok(service.getThreadPools());
+    }
+
+    @GetMapping("/db-pool")
+    public ResponseEntity<DbPoolMetricsDTO> getDbPool() {
+        return ResponseEntity.ok(service.getDbPool());
+    }
 }

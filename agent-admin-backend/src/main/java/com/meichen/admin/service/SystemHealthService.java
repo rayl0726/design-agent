@@ -15,13 +15,16 @@ public class SystemHealthService {
     private final StageLogReadRepository stageLogRepo;
     private final WorkflowLogReadRepository workflowLogRepo;
     private final HttpRequestLogReadRepository httpLogRepo;
+    private final ActuatorClient actuatorClient;
 
     public SystemHealthService(StageLogReadRepository stageLogRepo,
                                WorkflowLogReadRepository workflowLogRepo,
-                               HttpRequestLogReadRepository httpLogRepo) {
+                               HttpRequestLogReadRepository httpLogRepo,
+                               ActuatorClient actuatorClient) {
         this.stageLogRepo = stageLogRepo;
         this.workflowLogRepo = workflowLogRepo;
         this.httpLogRepo = httpLogRepo;
+        this.actuatorClient = actuatorClient;
     }
 
     public List<WorkflowSuccessDTO> getWorkflowSuccess(int days) {
@@ -106,5 +109,13 @@ public class SystemHealthService {
             maxDuration,
             topEndpoints
         );
+    }
+
+    public List<ThreadPoolMetricsDTO> getThreadPools() {
+        return actuatorClient.getThreadPoolMetrics();
+    }
+
+    public DbPoolMetricsDTO getDbPool() {
+        return actuatorClient.getDbPoolMetrics();
     }
 }

@@ -116,4 +116,26 @@ class SystemHealthControllerIntegrationTest {
         mockMvc.perform(get("/api/admin/metrics/system/workflow-success"))
             .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    void getThreadPools_returnsMetrics() throws Exception {
+        mockMvc.perform(get("/api/admin/metrics/system/thread-pools")
+                .header("X-Admin-Token", "test-token"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isArray())
+            .andExpect(jsonPath("$[0].name").exists())
+            .andExpect(jsonPath("$[0].active").exists())
+            .andExpect(jsonPath("$[0].core").exists())
+            .andExpect(jsonPath("$[0].max").exists());
+    }
+
+    @Test
+    void getDbPool_returnsMetrics() throws Exception {
+        mockMvc.perform(get("/api/admin/metrics/system/db-pool")
+                .header("X-Admin-Token", "test-token"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.active").exists())
+            .andExpect(jsonPath("$.idle").exists())
+            .andExpect(jsonPath("$.max").exists());
+    }
 }
