@@ -31,6 +31,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 .requestMatchers("/api/v1/internal/**").permitAll()
+                .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers("/images/**", "/data/**").permitAll()
                 .anyRequest().authenticated()
             )
