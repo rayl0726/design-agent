@@ -11,9 +11,12 @@ from app.services.intent_recognition_result import ValidatedIntent
 from app.services.intent_schemas import IntentOutput
 
 
+_DEFAULT_TRACE_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "intent_traces"
+
+
 class IntentTraceRecorder:
-    def __init__(self, base_dir: str | Path = "agent-core/data/intent_traces"):
-        self.base_dir = Path(base_dir)
+    def __init__(self, base_dir: str | Path | None = None):
+        self.base_dir = Path(base_dir) if base_dir else _DEFAULT_TRACE_DIR
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
     def _file_path(self) -> Path:
