@@ -343,6 +343,7 @@ class IntentValidator:
 
         inherit_fields = [
             "space_type",
+            "theme",
             "style",
             "color_preference",
             "brand_positioning",

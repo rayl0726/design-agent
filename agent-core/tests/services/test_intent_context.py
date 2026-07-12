@@ -176,3 +176,96 @@ class TestBuildPromptWithContext:
         # 消息被截断到 200 字符
         assert "A" * 200 in prompt
         assert "A" * 201 not in prompt
+
+
+class DummySemanticMatcher:
+    async def match(self, text: str, field_type: str) -> tuple[str | None, float]:
+        return None, 0.0
+
+
+from app.services.intent_recognition import IntentRecognitionService
+
+
+class _ContextCapturingLLM:
+    """捕获传给 extractor 的上下文参数。"""
+    def __init__(self):
+        self.captured_prompt = ""
+
+    async def complete(self, system_prompt, user_prompt, json_mode=False, temperature=0.7):
+        self.captured_prompt = user_prompt
+        return '{"space_type": "购物中心中庭", "budget": 1000000}'
+
+
+class TestRecognizePassesContext:
+    @pytest.mark.asyncio
+    async def test_recognize_passes_previous_intent_to_llm(self):
+        service = IntentRecognitionService(
+            llm_client=_ContextCapturingLLM(),
+            semantic_matcher=DummySemanticMatcher(),
+        )
+        previous = ValidatedIntent(
+            theme=RecognizedField(name="theme", value="新春国潮", source=FieldSource.LLM, confidence=0.85),
+            style=RecognizedField(name="style", value="国潮", source=FieldSource.LLM, confidence=1.0),
+        )
+        await service.recognize("购物中心中庭", previous_intent=previous)
+        prompt = service._llm_client.captured_prompt
+        assert "新春国潮" in prompt
+        assert "国潮" in prompt
+
+    @pytest.mark.asyncio
+    async def test_recognize_passes_recent_messages_to_llm(self):
+        service = IntentRecognitionService(
+            llm_client=_ContextCapturingLLM(),
+            semantic_matcher=DummySemanticMatcher(),
+        )
+        await service.recognize(
+            "预算100万",
+            recent_messages=["新春国潮国潮风格"],
+        )
+        prompt = service._llm_client.captured_prompt
+        assert "新春国潮国潮风格" in prompt
+
+    @pytest.mark.asyncio
+    async def test_recognize_passes_summary_to_llm(self):
+        service = IntentRecognitionService(
+            llm_client=_ContextCapturingLLM(),
+            semantic_matcher=DummySemanticMatcher(),
+        )
+        await service.recognize(
+            "预算100万",
+            conversation_summary="第1轮：主题=新春国潮",
+        )
+        prompt = service._llm_client.captured_prompt
+        assert "主题=新春国潮" in prompt
+
+    @pytest.mark.asyncio
+    async def test_recognize_without_context_still_works(self):
+        service = IntentRecognitionService(
+            llm_client=_ContextCapturingLLM(),
+            semantic_matcher=DummySemanticMatcher(),
+        )
+        result = await service.recognize("购物中心中庭")
+        assert result.space_type is not None
+        assert result.space_type.value == "购物中心中庭"
+
+    @pytest.mark.asyncio
+    async def test_merge_context_inherits_theme_from_previous(self):
+        """验证 previous_intent 传入后 merge_context 正确继承字段。"""
+        service = IntentRecognitionService(
+            llm_client=_ContextCapturingLLM(),
+            semantic_matcher=DummySemanticMatcher(),
+        )
+        previous = ValidatedIntent(
+            theme=RecognizedField(name="theme", value="新春国潮", source=FieldSource.LLM, confidence=0.85),
+            style=RecognizedField(name="style", value="国潮", source=FieldSource.LLM, confidence=1.0),
+        )
+        # LLM 返回 space_type + budget，不含 theme/style
+        result = await service.recognize("购物中心中庭100万", previous_intent=previous)
+        # space_type 和 budget 来自当前轮
+        assert result.space_type is not None
+        assert result.budget is not None
+        # theme 和 style 从 previous_intent 继承
+        assert result.theme is not None
+        assert result.theme.value == "新春国潮"
+        assert result.style is not None
+        assert result.style.value == "国潮"
