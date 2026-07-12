@@ -68,4 +68,24 @@ public interface FeedbackReadRepository extends JpaRepository<FeedbackRead, Stri
            "FROM FeedbackRead f WHERE f.imageUrl IS NOT NULL AND f.createdAt >= :since " +
            "GROUP BY CAST(f.createdAt AS date) ORDER BY CAST(f.createdAt AS date)")
     List<Object[]> countImageFeedbackByDate(@Param("since") LocalDateTime since);
+
+    @Query("SELECT CAST(f.createdAt AS date), f.promptTemplateVersion, COUNT(f), " +
+           "SUM(CASE WHEN f.tag IN ('good', 'like', 'positive') THEN 1 ELSE 0 END), " +
+           "SUM(CASE WHEN f.tag IN ('bad', 'dislike', 'negative', 'composition', 'quality') THEN 1 ELSE 0 END) " +
+           "FROM FeedbackRead f WHERE f.imageUrl IS NOT NULL AND f.createdAt >= :since " +
+           "GROUP BY CAST(f.createdAt AS date), f.promptTemplateVersion " +
+           "ORDER BY CAST(f.createdAt AS date)")
+    List<Object[]> countImageFeedbackByDateAndVersion(@Param("since") LocalDateTime since);
+
+    @Query("SELECT f.promptTemplateVersion, COUNT(f), " +
+           "SUM(CASE WHEN f.tag IN ('good', 'like', 'positive') THEN 1 ELSE 0 END), " +
+           "SUM(CASE WHEN f.tag IN ('bad', 'dislike', 'negative', 'composition', 'quality') THEN 1 ELSE 0 END) " +
+           "FROM FeedbackRead f WHERE f.imageUrl IS NOT NULL AND f.promptTemplateVersion IS NOT NULL " +
+           "GROUP BY f.promptTemplateVersion")
+    List<Object[]> countImageFeedbackByVersion();
+
+    @Query("SELECT f.promptTemplateVersion, f.tag, COUNT(f) FROM FeedbackRead f " +
+           "WHERE f.imageUrl IS NOT NULL AND f.promptTemplateVersion IS NOT NULL " +
+           "GROUP BY f.promptTemplateVersion, f.tag ORDER BY COUNT(f) DESC")
+    List<Object[]> countImageFeedbackTagByVersion();
 }

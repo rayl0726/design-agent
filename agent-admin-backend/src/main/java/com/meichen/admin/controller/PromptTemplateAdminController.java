@@ -33,4 +33,21 @@ public class PromptTemplateAdminController {
             @RequestBody PromptPreviewRequestDTO request) {
         return ResponseEntity.ok(service.previewPrompt(request));
     }
+
+    @GetMapping("/usage")
+    public ResponseEntity<List<PromptTemplateUsageDTO>> getUsage(
+            @RequestParam(defaultValue = "24") int hours) {
+        return ResponseEntity.ok(service.getUsage(hours));
+    }
+
+    @GetMapping("/quality-trend")
+    public ResponseEntity<List<PromptTemplateQualityTrendDTO>> getQualityTrend(
+            @RequestParam(defaultValue = "168") int hours) {
+        return ResponseEntity.ok(service.getQualityTrend(hours));
+    }
+
+    @GetMapping("/compare")
+    public ResponseEntity<List<PromptTemplateCompareDTO>> compareVersions() {
+        return ResponseEntity.ok(service.compareVersions());
+    }
 }

@@ -82,4 +82,15 @@ public interface AiCallLogReadRepository extends JpaRepository<AiCallLogRead, Lo
            "FROM AiCallLogRead l WHERE l.callType = 'image_generation' AND l.createdAt >= :since " +
            "GROUP BY CAST(l.createdAt AS date) ORDER BY CAST(l.createdAt AS date)")
     List<Object[]> groupImageGenByDate(@Param("since") LocalDateTime since);
+
+    @Query("SELECT l.nodeName, COUNT(l), COUNT(DISTINCT l.projectId) " +
+           "FROM AiCallLogRead l WHERE l.callType = 'llm' AND l.createdAt >= :since " +
+           "GROUP BY l.nodeName")
+    List<Object[]> groupPromptInvocations(@Param("since") LocalDateTime since);
+
+    @Query("SELECT CAST(l.createdAt AS date), l.nodeName, COUNT(l) " +
+           "FROM AiCallLogRead l WHERE l.callType = 'llm' AND l.createdAt >= :since " +
+           "GROUP BY CAST(l.createdAt AS date), l.nodeName " +
+           "ORDER BY CAST(l.createdAt AS date)")
+    List<Object[]> groupPromptInvocationsByDate(@Param("since") LocalDateTime since);
 }

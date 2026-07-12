@@ -1,6 +1,7 @@
 package com.meichen.admin.service;
 
 import com.meichen.admin.dto.*;
+import com.meichen.admin.repository.AiCallLogReadRepository;
 import com.meichen.admin.repository.FeedbackReadRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import static org.mockito.Mockito.*;
 class PromptTemplateAdminServiceTest {
 
     private FeedbackReadRepository feedbackRepo;
+    private AiCallLogReadRepository aiCallLogRepo;
     private PromptTemplateAdminService service;
 
     @TempDir
@@ -25,6 +27,7 @@ class PromptTemplateAdminServiceTest {
     @BeforeEach
     void setUp() throws Exception {
         feedbackRepo = mock(FeedbackReadRepository.class);
+        aiCallLogRepo = mock(AiCallLogReadRepository.class);
         File templateDir = new File(tempDir, "prompt_templates");
         templateDir.mkdirs();
         File templateFile = new File(templateDir, "shopping_mall_atrium.yaml");
@@ -32,7 +35,7 @@ class PromptTemplateAdminServiceTest {
         java.nio.file.Files.writeString(templateFile.toPath(),
             "space_types:\n  - \"购物中心中庭\"\nversion: \"1.0\"\n");
 
-        service = new PromptTemplateAdminService(feedbackRepo, "http://localhost:8000", tempDir.getAbsolutePath());
+        service = new PromptTemplateAdminService(feedbackRepo, aiCallLogRepo, "http://localhost:8000", tempDir.getAbsolutePath());
     }
 
     @Test
