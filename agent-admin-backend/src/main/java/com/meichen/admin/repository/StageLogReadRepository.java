@@ -17,11 +17,6 @@ public interface StageLogReadRepository extends JpaRepository<StageLogRead, Long
            "GROUP BY s.stageName ORDER BY COUNT(s) DESC")
     List<Object[]> aggregateWorkflowSuccess(@Param("since") LocalDateTime since);
 
-    @Query("SELECT s.stageName, COUNT(s) FROM StageLogRead s " +
-           "WHERE s.status = 'FAILED' AND s.parentId IS NULL AND s.startedAt >= :since " +
-           "GROUP BY s.stageName ORDER BY COUNT(s) DESC")
-    List<Object[]> findFailurePoints(@Param("since") LocalDateTime since);
-
     @Query("SELECT " +
            "SUM(CASE WHEN s.timeAnomaly = true THEN 1 ELSE 0 END), " +
            "SUM(CASE WHEN s.subStageOverflow = true THEN 1 ELSE 0 END) " +

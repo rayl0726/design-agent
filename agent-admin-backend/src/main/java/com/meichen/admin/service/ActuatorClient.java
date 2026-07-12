@@ -3,16 +3,20 @@ package com.meichen.admin.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.meichen.admin.dto.DbPoolMetricsDTO;
 import com.meichen.admin.dto.ThreadPoolMetricsDTO;
+import io.netty.channel.ChannelOption;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 @Component
 public class ActuatorClient {
@@ -23,7 +27,13 @@ public class ActuatorClient {
     private final WebClient actuatorClient;
 
     public ActuatorClient(@Value("${admin.agent-api.base-url}") String agentApiBaseUrl) {
-        this.actuatorClient = WebClient.builder().baseUrl(agentApiBaseUrl).build();
+        HttpClient httpClient = HttpClient.create()
+            .responseTimeout(Duration.ofSeconds(5))
+            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 2000);
+        this.actuatorClient = WebClient.builder()
+            .baseUrl(agentApiBaseUrl)
+            .clientConnector(new ReactorClientHttpConnector(httpClient))
+            .build();
     }
 
     public List<ThreadPoolMetricsDTO> getThreadPoolMetrics() {
@@ -31,12 +41,13 @@ public class ActuatorClient {
         String[] executorNames = {"workflowExecutor", "dialogueExecutor"};
         for (String name : executorNames) {
             try {
-                int active = getMetricValue("executor.active", "name", name);
-                int core = getMetricValue("executor.pool.core", "name", name);
-                int max = getMetricValue("executor.pool.max", "name", name);
-                long completed = getMetricValueAsLong("executor.completed", "name", name);
-                int queueSize = getMetricValue("executor.queue.remaining", "name", name);
-                pools.add(new ThreadPoolMetricsDTO(name, active, core, max, completed, queueSize));
+                CompletableFuture<Integer> activeF = CompletableFuture.supplyAsync(() -> getMetricValue("executor.active", "name", name));
+                CompletableFuture<Integer> coreF = CompletableFuture.supplyAsync(() -> getMetricValue("executor.pool.core", "name", name));
+                CompletableFuture<Integer> maxF = CompletableFuture.supplyAsync(() -> getMetricValue("executor.pool.max", "name", name));
+                CompletableFuture<Long> completedF = CompletableFuture.supplyAsync(() -> getMetricValueAsLong("executor.completed", "name", name));
+                CompletableFuture<Integer> queueF = CompletableFuture.supplyAsync(() -> getMetricValue("executor.queue.remaining", "name", name));
+                CompletableFuture.allOf(activeF, coreF, maxF, completedF, queueF).join();
+                pools.add(new ThreadPoolMetricsDTO(name, activeF.join(), coreF.join(), maxF.join(), completedF.join(), queueF.join()));
             } catch (Exception e) {
                 log.warn("Failed to fetch thread pool metrics for {}: {}", name, e.getMessage());
                 pools.add(new ThreadPoolMetricsDTO(name, 0, 0, 0, 0, 0));

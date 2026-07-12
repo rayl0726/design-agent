@@ -78,13 +78,6 @@ class SystemHealthRepositoryTest {
     }
 
     @Test
-    void stageLogRepo_findFailurePoints_returnsFailedStages() {
-        LocalDateTime since = LocalDateTime.now().minusDays(7);
-        List<Object[]> results = stageLogRepo.findFailurePoints(since);
-        assertFalse(results.isEmpty());
-    }
-
-    @Test
     void stageLogRepo_countAnomalies_returnsCounts() {
         LocalDateTime since = LocalDateTime.now().minusDays(7);
         Object[] result = stageLogRepo.countAnomalies(since);
