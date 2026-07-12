@@ -36,6 +36,12 @@ const routes = [
         name: 'AiModelMonitoring',
         component: () => import('../views/AiModelMonitoring.vue'),
         meta: { title: 'AI 模型监控', icon: 'Monitor' }
+      },
+      {
+        path: 'system-health',
+        name: 'SystemHealth',
+        component: () => import('../views/SystemHealth.vue'),
+        meta: { title: '系统健康', icon: 'Cpu' }
       }
     ]
   }
