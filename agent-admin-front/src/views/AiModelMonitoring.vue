@@ -91,7 +91,7 @@ const summaryCards = computed(() => {
     { type: 'llm', label: 'LLM 调用', icon: 'ChatLineSquare', color: '#409eff' },
     { type: 'vlm', label: 'VLM 调用', icon: 'Picture', color: '#67c23a' },
     { type: 'embedding', label: 'Embedding', icon: 'Histogram', color: '#e6a23c' },
-    { type: 'image_gen', label: '图像生成', icon: 'Image', color: '#f56c6c' },
+    { type: 'image_gen', label: '图像生成', icon: 'PictureFilled', color: '#f56c6c' },
   ]
   for (const t of types) {
     const s = summary.value.find(s => s.callType === t.type)
