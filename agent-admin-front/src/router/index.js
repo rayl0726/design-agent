@@ -42,6 +42,12 @@ const routes = [
         name: 'SystemHealth',
         component: () => import('../views/SystemHealth.vue'),
         meta: { title: '系统健康', icon: 'Cpu' }
+      },
+      {
+        path: 'intent-quality',
+        name: 'IntentQuality',
+        component: () => import('../views/IntentQuality.vue'),
+        meta: { title: '意图质量', icon: 'Aim' }
       }
     ]
   }
