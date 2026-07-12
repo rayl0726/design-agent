@@ -39,4 +39,10 @@ public class BusinessFunnelController {
             @RequestParam(defaultValue = "30") int days) {
         return ResponseEntity.ok(service.getDuration(days));
     }
+
+    @GetMapping("/conversations")
+    public ResponseEntity<ConversationStatsDTO> getConversations(
+            @RequestParam(defaultValue = "30") int days) {
+        return ResponseEntity.ok(service.getConversationStats(days));
+    }
 }

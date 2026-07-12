@@ -3,6 +3,7 @@ package com.meichen.admin.service;
 import com.meichen.admin.dto.*;
 import com.meichen.admin.entity.ProjectRead;
 import com.meichen.admin.repository.ProjectReadRepository;
+import com.meichen.admin.repository.SessionMessageReadRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -13,9 +14,12 @@ import java.util.List;
 public class BusinessFunnelService {
 
     private final ProjectReadRepository projectRepo;
+    private final SessionMessageReadRepository sessionMessageRepo;
 
-    public BusinessFunnelService(ProjectReadRepository projectRepo) {
+    public BusinessFunnelService(ProjectReadRepository projectRepo,
+                                 SessionMessageReadRepository sessionMessageRepo) {
         this.projectRepo = projectRepo;
+        this.sessionMessageRepo = sessionMessageRepo;
     }
 
     public ProjectFunnelDTO getFunnel(int days) {
@@ -71,5 +75,36 @@ public class BusinessFunnelService {
         double p90 = durations.get((int) (durations.size() * 0.9));
         double max = durations.stream().mapToDouble(d -> d).max().orElse(0);
         return new ProjectDurationDTO(avg, median, p90, max, completed.size());
+    }
+
+    public ConversationStatsDTO getConversationStats(int days) {
+        LocalDateTime since = LocalDateTime.now().minusDays(days);
+        List<String> projectIds = projectRepo.findByCreatedAtAfter(since)
+            .stream().map(ProjectRead::getId).toList();
+
+        if (projectIds.isEmpty()) {
+            return new ConversationStatsDTO(0, 0, 0, 0, 0, 0, 0, 0);
+        }
+
+        List<Long> turnCounts = projectIds.stream()
+            .map(pid -> sessionMessageRepo.countByProjectIdAndRole(pid, "user"))
+            .filter(count -> count > 0)
+            .sorted()
+            .toList();
+
+        if (turnCounts.isEmpty()) {
+            return new ConversationStatsDTO(0, 0, 0, 0, 0, 0, 0, 0);
+        }
+
+        double avg = turnCounts.stream().mapToLong(l -> l).average().orElse(0);
+        double median = turnCounts.get(turnCounts.size() / 2);
+        long max = turnCounts.stream().mapToLong(l -> l).max().orElse(0);
+
+        long t1_3 = turnCounts.stream().filter(c -> c >= 1 && c <= 3).count();
+        long t4_6 = turnCounts.stream().filter(c -> c >= 4 && c <= 6).count();
+        long t7_10 = turnCounts.stream().filter(c -> c >= 7 && c <= 10).count();
+        long t10p = turnCounts.stream().filter(c -> c > 10).count();
+
+        return new ConversationStatsDTO(avg, median, max, turnCounts.size(), t1_3, t4_6, t7_10, t10p);
     }
 }

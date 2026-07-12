@@ -36,15 +36,29 @@ class BusinessFunnelControllerIntegrationTest {
     @BeforeEach
     void setUp() {
         jdbcTemplate.execute("DELETE FROM java_projects");
+        jdbcTemplate.execute("DELETE FROM session_messages");
         jdbcTemplate.update(
             "INSERT INTO java_projects (id, name, status, current_level, created_at) " +
-            "VALUES ('p1', 'Project A', 'draft', 'L1', CURRENT_TIMESTAMP)");
+            "VALUES ('p1', 'Project A', 'completed', 'L3', CURRENT_TIMESTAMP)");
         jdbcTemplate.update(
             "INSERT INTO java_projects (id, name, status, current_level, created_at) " +
-            "VALUES ('p2', 'Project B', 'generating', 'L2', CURRENT_TIMESTAMP)");
+            "VALUES ('p2', 'Project B', 'draft', 'L1', CURRENT_TIMESTAMP)");
         jdbcTemplate.update(
             "INSERT INTO java_projects (id, name, status, current_level, created_at) " +
-            "VALUES ('p3', 'Project C', 'completed', 'L3', CURRENT_TIMESTAMP)");
+            "VALUES ('p3', 'Project C', 'generating', 'L2', CURRENT_TIMESTAMP)");
+
+        jdbcTemplate.update(
+            "INSERT INTO session_messages (id, project_id, role, message_type, content, public_id) " +
+            "VALUES ('m1', 'p1', 'user', 'text', 'hello', 'smpub1')");
+        jdbcTemplate.update(
+            "INSERT INTO session_messages (id, project_id, role, message_type, content, public_id) " +
+            "VALUES ('m2', 'p1', 'assistant', 'text', 'hi', 'smpub2')");
+        jdbcTemplate.update(
+            "INSERT INTO session_messages (id, project_id, role, message_type, content, public_id) " +
+            "VALUES ('m3', 'p1', 'user', 'text', 'design', 'smpub3')");
+        jdbcTemplate.update(
+            "INSERT INTO session_messages (id, project_id, role, message_type, content, public_id) " +
+            "VALUES ('m4', 'p2', 'user', 'text', 'test', 'smpub4')");
     }
 
     @Test
@@ -81,5 +95,15 @@ class BusinessFunnelControllerIntegrationTest {
                 .header("X-Admin-Token", "test-token"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.avgDurationHours").exists());
+    }
+
+    @Test
+    void getConversations_returnsTurnStats() throws Exception {
+        mockMvc.perform(get("/api/admin/metrics/conversations")
+                .param("days", "30")
+                .header("X-Admin-Token", "test-token"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.avgTurns").exists())
+            .andExpect(jsonPath("$.totalProjects").value(2));
     }
 }

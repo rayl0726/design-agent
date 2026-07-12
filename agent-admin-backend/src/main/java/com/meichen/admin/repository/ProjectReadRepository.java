@@ -25,4 +25,6 @@ public interface ProjectReadRepository extends JpaRepository<ProjectRead, String
     long countByCurrentLevel(String currentLevel);
 
     List<ProjectRead> findByStatusAndCreatedAtAfter(String status, LocalDateTime createdAt);
+
+    List<ProjectRead> findByCreatedAtAfter(LocalDateTime createdAt);
 }
