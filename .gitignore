@@ -8,6 +8,7 @@ node_modules/
 .DS_Store
 *.log
 .vscode
+.trae/*
 design-data
 agent-core/.venv/
 agent-core/meichen_ai.egg-info/
