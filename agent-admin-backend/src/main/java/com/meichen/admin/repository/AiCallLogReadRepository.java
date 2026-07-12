@@ -20,7 +20,8 @@ public interface AiCallLogReadRepository extends JpaRepository<AiCallLogRead, Lo
            "SUM(l.inputTokens), " +
            "SUM(l.outputTokens) " +
            "FROM AiCallLogRead l WHERE l.createdAt >= :since " +
-           "GROUP BY l.callType")
+           "GROUP BY l.callType " +
+           "ORDER BY COUNT(l) DESC, l.callType")
     List<Object[]> groupByCallType(@Param("since") LocalDateTime since);
 
     @Query("SELECT l.provider, l.model, COUNT(l), " +
