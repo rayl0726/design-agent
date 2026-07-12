@@ -154,14 +154,36 @@ class TextParser:
 
     _intent_service = None
 
-    async def parse(self, text: str, project_id: str | None = None) -> dict[str, Any]:
+    async def parse(
+        self,
+        text: str,
+        project_id: str | None = None,
+        previous_intent: dict | None = None,
+        recent_messages: list[str] | None = None,
+        conversation_summary: str = "",
+    ) -> dict[str, Any]:
         from app.core.config import settings
 
         if getattr(settings, "intent_parser_legacy", False):
             return self._get_fallback_parse(text)
 
         service = self._intent_service or get_intent_service()
-        result = await service.recognize(text, project_id=project_id)
+
+        prev_validated = None
+        if previous_intent:
+            try:
+                prev_validated = self._dict_to_validated_intent(previous_intent)
+            except Exception as e:
+                print(f"TextParser.parse: _dict_to_validated_intent failed (non-fatal): {type(e).__name__}: {e}")
+                prev_validated = None
+
+        result = await service.recognize(
+            text=text,
+            previous_intent=prev_validated,
+            project_id=project_id,
+            recent_messages=recent_messages,
+            conversation_summary=conversation_summary,
+        )
         return self._validated_intent_to_dict(result)
 
     def _validated_intent_to_dict(self, result) -> dict[str, Any]:
@@ -187,6 +209,108 @@ class TextParser:
             "_recognition_meta": self._build_recognition_meta(result),
         }
         return data
+
+    def _dict_to_validated_intent(self, data: dict | None) -> ValidatedIntent | None:
+        """将 Java 传来的简单 dict 转换为 ValidatedIntent 对象。"""
+        if not data:
+            return None
+
+        from app.services.intent_recognition_result import (
+            ValidatedIntent,
+            RecognizedField,
+            FieldSource,
+        )
+
+        def _field(name: str, value) -> RecognizedField | None:
+            if value is None:
+                return None
+            if isinstance(value, str) and not value.strip():
+                return None
+            return RecognizedField(
+                name=name,
+                value=value,
+                source=FieldSource.UNKNOWN,
+                confidence=1.0,
+            )
+
+        def _list_fields(name: str, values) -> list[RecognizedField]:
+            if not values or not isinstance(values, list):
+                return []
+            return [
+                RecognizedField(name=name, value=v, source=FieldSource.UNKNOWN, confidence=1.0)
+                for v in values
+                if v is not None and (not isinstance(v, str) or v.strip())
+            ]
+
+        def _point_fields(points_data) -> list[RecognizedField]:
+            if not points_data or not isinstance(points_data, list):
+                return []
+            result = []
+            for p in points_data:
+                if isinstance(p, dict):
+                    name = p.get("name", "")
+                    if name and name.strip():
+                        result.append(
+                            RecognizedField(
+                                name="points",
+                                value=name.strip(),
+                                source=FieldSource.UNKNOWN,
+                                confidence=1.0,
+                            )
+                        )
+                elif isinstance(p, str) and p.strip():
+                    result.append(
+                        RecognizedField(
+                            name="points",
+                            value=p.strip(),
+                            source=FieldSource.UNKNOWN,
+                            confidence=1.0,
+                        )
+                    )
+            return result
+
+        intent = ValidatedIntent(
+            theme=_field("theme", data.get("theme")),
+            style=_field("style", data.get("style")),
+            space_type=_field("space_type", data.get("space_type")),
+            budget=_field("budget", data.get("budget")),
+            budget_level=_field("budget_level", data.get("budget_level")),
+            target_audience=_field("target_audience", data.get("target_audience")),
+            timeline=_field("timeline", data.get("timeline")),
+            color_preference=_field("color_preference", data.get("color_preference")),
+            brand_positioning=_field("brand_positioning", data.get("brand_positioning")),
+            design_system_preference=_field(
+                "design_system_preference", data.get("design_system_preference")
+            ),
+            material_restrictions=_list_fields(
+                "material_restrictions", data.get("material_restrictions")
+            ),
+            allowed_materials=_list_fields(
+                "allowed_materials", data.get("allowed_materials")
+            ),
+            special_requirements=_list_fields(
+                "special_requirements", data.get("special_requirements")
+            ),
+            points=_point_fields(data.get("points")),
+        )
+
+        # 检查是否有任何非空字段
+        has_value = any(
+            getattr(intent, f) is not None
+            for f in (
+                "theme", "style", "space_type", "budget", "budget_level",
+                "target_audience", "timeline", "color_preference",
+                "brand_positioning", "design_system_preference",
+            )
+        ) or any(
+            key in data
+            for key in (
+                "material_restrictions", "allowed_materials",
+                "special_requirements", "points",
+            )
+        )
+
+        return intent if has_value else None
 
     def _build_recognition_meta(self, result) -> dict[str, Any]:
         """Extract source/confidence/raw_text for all core fields for debug observability."""

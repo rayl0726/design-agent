@@ -69,10 +69,17 @@ class IntentRecognitionService:
         text: str,
         previous_intent: ValidatedIntent | None = None,
         project_id: str | None = None,
+        recent_messages: list[str] | None = None,
+        conversation_summary: str = "",
     ) -> ValidatedIntent:
         trace_id = str(uuid.uuid4())
 
-        llm_output = await self._llm_extractor.extract(text)
+        llm_output = await self._llm_extractor.extract(
+            text,
+            previous_intent=previous_intent,
+            recent_messages=recent_messages,
+            conversation_summary=conversation_summary,
+        )
         rule_output = await self._rule_extractor.extract(text)
         merged_output = _merge_intent_outputs(llm_output, rule_output)
 

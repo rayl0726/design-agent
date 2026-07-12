@@ -6,6 +6,7 @@ from typing import Any, Protocol
 
 from pydantic import ValidationError
 
+from app.services.intent_recognition_result import ValidatedIntent
 from app.services.intent_schemas import IntentOutput
 from app.services.learning.few_shot_library import Example, FewShotLibrary
 from app.services.llm_client import llm_client as _default_llm_client
@@ -63,15 +64,100 @@ class IntentLLMExtractor:
             f"- 材质候选：{', '.join(materials)}\n"
         )
 
-    async def _build_prompt(self, text: str) -> str:
+    async def _build_prompt(
+        self,
+        text: str,
+        previous_intent: ValidatedIntent | None = None,
+        recent_messages: list[str] | None = None,
+        conversation_summary: str = "",
+    ) -> str:
         schema_json = IntentOutput.model_json_schema()
-        return (
-            f"用户输入：\"{text}\"\n\n"
-            "请提取设计需求并输出符合以下 JSON Schema 的对象：\n"
-            f"{json.dumps(schema_json, ensure_ascii=False, indent=2)}\n"
-            f"{self._taxonomy_prompt_fragment()}"
-            f"{await self._few_shot_prompt_fragment(text)}"
+        parts: list[str] = [f"用户输入：\"{text}\"\n"]
+
+        context_fragment = self._context_prompt_fragment(
+            previous_intent, recent_messages, conversation_summary
         )
+        if context_fragment:
+            parts.append(context_fragment)
+
+        parts.append("\n请提取设计需求并输出符合以下 JSON Schema 的对象：\n")
+        parts.append(f"{json.dumps(schema_json, ensure_ascii=False, indent=2)}\n")
+        parts.append(self._taxonomy_prompt_fragment())
+        parts.append(await self._few_shot_prompt_fragment(text))
+        return "".join(parts)
+
+    def _context_prompt_fragment(
+        self,
+        previous_intent: ValidatedIntent | None,
+        recent_messages: list[str] | None,
+        conversation_summary: str,
+    ) -> str:
+        """构建上下文 prompt 片段，包含已识别需求、最近对话和历史摘要。"""
+        sections: list[str] = []
+
+        # 第 1 层：之前已识别的需求
+        prev_lines = self._previous_intent_lines(previous_intent)
+        if prev_lines:
+            sections.append("── 之前已识别的需求 ──\n" + "\n".join(prev_lines) + "\n")
+
+        # 第 2 层：最近的对话
+        if recent_messages:
+            msg_lines = []
+            for msg in recent_messages:
+                truncated = msg[:200] if len(msg) > 200 else msg
+                msg_lines.append(f'用户："{truncated}"')
+            sections.append("── 最近的对话 ──\n" + "\n".join(msg_lines) + "\n")
+
+        # 第 3 层：对话历史摘要
+        if conversation_summary and conversation_summary.strip():
+            summary = conversation_summary.strip()
+            if len(summary) > 2500:
+                lines = summary.split("\n")
+                summary = "\n".join(lines[:50])
+            sections.append("── 对话历史摘要 ──\n" + summary + "\n")
+
+        return "\n".join(sections)
+
+    def _previous_intent_lines(self, previous_intent: ValidatedIntent | None) -> list[str]:
+        """从 ValidatedIntent 提取非空字段，返回简洁的 key-value 行。"""
+        if previous_intent is None:
+            return []
+
+        labels = {
+            "theme": "主题",
+            "style": "风格",
+            "space_type": "空间类型",
+            "budget": "预算",
+            "budget_level": "预算等级",
+            "target_audience": "目标受众",
+            "timeline": "时间线",
+            "color_preference": "颜色偏好",
+            "brand_positioning": "品牌定位",
+            "design_system_preference": "设计系统偏好",
+        }
+
+        lines: list[str] = []
+        for field_name, label in labels.items():
+            field = getattr(previous_intent, field_name, None)
+            if field is not None and field.value is not None:
+                lines.append(f"- {label}：{field.value}")
+
+        for field_name, label in {
+            "material_restrictions": "材料限制",
+            "allowed_materials": "允许材料",
+            "special_requirements": "特殊要求",
+        }.items():
+            items = getattr(previous_intent, field_name, [])
+            if items:
+                values = ", ".join(str(item.value) for item in items)
+                lines.append(f"- {label}：{values}")
+
+        points = getattr(previous_intent, "points", [])
+        if points:
+            point_values = ", ".join(str(p.value) for p in points)
+            lines.append(f"- 点位：{point_values}")
+
+        return lines
 
     async def _few_shot_prompt_fragment(self, text: str) -> str:
         if self._few_shot_library is None:
@@ -149,8 +235,19 @@ class IntentLLMExtractor:
             and not output.special_requirements
         )
 
-    async def extract(self, text: str) -> IntentOutput | None:
-        prompt = await self._build_prompt(text)
+    async def extract(
+        self,
+        text: str,
+        previous_intent: ValidatedIntent | None = None,
+        recent_messages: list[str] | None = None,
+        conversation_summary: str = "",
+    ) -> IntentOutput | None:
+        prompt = await self._build_prompt(
+            text,
+            previous_intent=previous_intent,
+            recent_messages=recent_messages,
+            conversation_summary=conversation_summary,
+        )
         for attempt in range(self._max_retries + 1):
             try:
                 raw = await self._llm_client.complete(
