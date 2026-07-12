@@ -1,8 +1,11 @@
 package com.meichen.orchestrator.controller;
 
 import com.meichen.orchestrator.dto.AiCallLogRequest;
+import com.meichen.orchestrator.dto.RagSearchLogRequest;
 import com.meichen.orchestrator.entity.AiCallLog;
+import com.meichen.orchestrator.entity.RagSearchLog;
 import com.meichen.orchestrator.repository.AiCallLogRepository;
+import com.meichen.orchestrator.repository.RagSearchLogRepository;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,9 +21,12 @@ public class InternalLogController {
     private static final Logger log = LoggerFactory.getLogger(InternalLogController.class);
 
     private final AiCallLogRepository aiCallLogRepository;
+    private final RagSearchLogRepository ragSearchLogRepository;
 
-    public InternalLogController(AiCallLogRepository aiCallLogRepository) {
+    public InternalLogController(AiCallLogRepository aiCallLogRepository,
+                                 RagSearchLogRepository ragSearchLogRepository) {
         this.aiCallLogRepository = aiCallLogRepository;
+        this.ragSearchLogRepository = ragSearchLogRepository;
     }
 
     @PostMapping("/ai-call-logs")
@@ -44,6 +50,26 @@ public class InternalLogController {
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             log.error("Failed to persist AI call log: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @PostMapping("/rag-search-logs")
+    public ResponseEntity<Void> receiveRagSearchLog(@Valid @RequestBody RagSearchLogRequest request) {
+        try {
+            RagSearchLog entity = new RagSearchLog();
+            entity.setProjectId(request.getProjectId());
+            entity.setQueryText(request.getQueryText());
+            entity.setSearchType(request.getSearchType());
+            entity.setResultCount(request.getResultCount());
+            entity.setDurationMs(request.getDurationMs());
+            entity.setCacheHit(request.getCacheHit());
+            entity.setTimedOut(request.getTimedOut());
+            entity.setCreatedAt(LocalDateTime.now());
+            ragSearchLogRepository.save(entity);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            log.error("Failed to persist RAG search log: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().build();
         }
     }
