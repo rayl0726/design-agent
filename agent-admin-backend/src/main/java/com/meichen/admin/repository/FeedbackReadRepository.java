@@ -47,4 +47,25 @@ public interface FeedbackReadRepository extends JpaRepository<FeedbackRead, Stri
     @Query("SELECT f FROM FeedbackRead f WHERE f.feedbackType = 'intent' AND f.processed = false " +
            "ORDER BY f.createdAt DESC")
     List<FeedbackRead> findUnprocessedIntentCorrections();
+
+    @Query("SELECT COUNT(f), " +
+           "SUM(CASE WHEN f.imageUrl IS NOT NULL THEN 1 ELSE 0 END) " +
+           "FROM FeedbackRead f WHERE f.createdAt >= :since")
+    List<Object[]> aggregateImageFeedbackOverview(@Param("since") LocalDateTime since);
+
+    default java.util.Optional<Object[]> findImageFeedbackOverview(LocalDateTime since) {
+        return aggregateImageFeedbackOverview(since).stream().findFirst();
+    }
+
+    @Query("SELECT f.tag, COUNT(f) FROM FeedbackRead f " +
+           "WHERE f.imageUrl IS NOT NULL AND f.createdAt >= :since " +
+           "GROUP BY f.tag ORDER BY COUNT(f) DESC")
+    List<Object[]> countImageFeedbackByTag(@Param("since") LocalDateTime since);
+
+    @Query("SELECT CAST(f.createdAt AS date), COUNT(f), " +
+           "SUM(CASE WHEN f.tag IN ('good', 'like', 'positive') THEN 1 ELSE 0 END), " +
+           "SUM(CASE WHEN f.tag IN ('bad', 'dislike', 'negative', 'composition', 'quality') THEN 1 ELSE 0 END) " +
+           "FROM FeedbackRead f WHERE f.imageUrl IS NOT NULL AND f.createdAt >= :since " +
+           "GROUP BY CAST(f.createdAt AS date) ORDER BY CAST(f.createdAt AS date)")
+    List<Object[]> countImageFeedbackByDate(@Param("since") LocalDateTime since);
 }

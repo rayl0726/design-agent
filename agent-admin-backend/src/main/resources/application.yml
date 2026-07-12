@@ -18,6 +18,22 @@ spring:
 
 admin:
   token: ${ADMIN_TOKEN:admin-secret-2026}
+  metrics:
+    pricing:
+      zhipu:
+        llm:
+          input-per-1k: 0.001
+          output-per-1k: 0.002
+        vlm:
+          input-per-1k: 0.005
+          output-per-1k: 0.01
+        embedding:
+          per-1k: 0.0005
+        image-generation:
+          per-image: 0.1
+      siliconflow:
+        image-generation:
+          per-image: 0.05
   agent-core:
     base-url: http://localhost:8000
     data-dir: ${AGENT_CORE_DATA_DIR:/Users/liulei/private-work/design-agent/agent-core/data}

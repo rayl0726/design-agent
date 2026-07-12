@@ -49,4 +49,37 @@ public interface AiCallLogReadRepository extends JpaRepository<AiCallLogRead, Lo
     @Query("SELECT l FROM AiCallLogRead l WHERE l.status != 'success' AND l.createdAt >= :since " +
            "ORDER BY l.createdAt DESC LIMIT :limit")
     List<AiCallLogRead> findRecentErrors(@Param("since") LocalDateTime since, @Param("limit") int limit);
+
+    @Query("SELECT COUNT(l), " +
+           "SUM(CASE WHEN l.status = 'success' THEN 1 ELSE 0 END), " +
+           "SUM(CASE WHEN l.status != 'success' THEN 1 ELSE 0 END), " +
+           "AVG(l.durationMs), " +
+           "COUNT(DISTINCT l.projectId) " +
+           "FROM AiCallLogRead l WHERE l.callType = 'image_generation' AND l.createdAt >= :since")
+    List<Object[]> aggregateImageGenOverview(@Param("since") LocalDateTime since);
+
+    default java.util.Optional<Object[]> findImageGenOverview(LocalDateTime since) {
+        return aggregateImageGenOverview(since).stream().findFirst();
+    }
+
+    @Query("SELECT l.provider, COUNT(l), " +
+           "SUM(CASE WHEN l.status = 'success' THEN 1 ELSE 0 END), " +
+           "AVG(l.durationMs) " +
+           "FROM AiCallLogRead l WHERE l.callType = 'image_generation' AND l.createdAt >= :since " +
+           "GROUP BY l.provider")
+    List<Object[]> groupImageGenByProvider(@Param("since") LocalDateTime since);
+
+    @Query("SELECT l.errorMessage, COUNT(l) " +
+           "FROM AiCallLogRead l WHERE l.callType = 'image_generation' AND l.status != 'success' " +
+           "AND l.createdAt >= :since AND l.errorMessage IS NOT NULL " +
+           "GROUP BY l.errorMessage ORDER BY COUNT(l) DESC")
+    List<Object[]> findImageGenFailureReasons(@Param("since") LocalDateTime since);
+
+    @Query("SELECT CAST(l.createdAt AS date), " +
+           "SUM(CASE WHEN l.status = 'success' THEN 1 ELSE 0 END), " +
+           "SUM(CASE WHEN l.status = 'failed' THEN 1 ELSE 0 END), " +
+           "SUM(CASE WHEN l.status = 'rate_limited' THEN 1 ELSE 0 END) " +
+           "FROM AiCallLogRead l WHERE l.callType = 'image_generation' AND l.createdAt >= :since " +
+           "GROUP BY CAST(l.createdAt AS date) ORDER BY CAST(l.createdAt AS date)")
+    List<Object[]> groupImageGenByDate(@Param("since") LocalDateTime since);
 }
