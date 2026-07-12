@@ -210,8 +210,10 @@ public class IntentTaxonomyAdminService {
     private String mapFieldToSection(String intentField) {
         return switch (intentField) {
             case "space_type" -> "space_types";
+            case "point" -> "points";
             case "budget", "budget_level" -> "budget_levels";
             case "style" -> "styles";
+            case "material" -> "materials";
             default -> throw new IllegalArgumentException("Cannot map field: " + intentField);
         };
     }

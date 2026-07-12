@@ -97,25 +97,24 @@
           <el-table-column label="类别" width="140">
             <template #default="{ row }">
               <el-tag type="warning" effect="plain">
-                {{ categoryLabel(row.category) }}
+                {{ categoryLabel(row.intentField) }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="规范名" prop="canonical" min-width="160" />
-          <el-table-column label="提议别名" prop="proposedAlias" min-width="140">
+          <el-table-column label="原值（用户输入）" prop="originalValue" min-width="160">
             <template #default="{ row }">
-              <el-tag type="success">{{ row.proposedAlias }}</el-tag>
+              <el-tag type="success">{{ row.originalValue }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="原值" prop="originalValue" min-width="140" />
-          <el-table-column label="修正值" prop="correctedValue" min-width="160" />
+          <el-table-column label="修正值（规范名）" prop="correctedValue" min-width="160" />
+          <el-table-column label="出现次数" prop="occurrenceCount" width="100" align="center" />
           <el-table-column label="操作" width="180" align="center" fixed="right">
             <template #default="{ row }">
               <el-button
                 type="success"
                 size="small"
                 :icon="Check"
-                :loading="applyingId === row.id"
+                :loading="applyingId === proposalKey(row)"
                 @click="applyProposal(row)"
               >
                 应用
@@ -123,7 +122,7 @@
               <el-button
                 size="small"
                 :icon="Close"
-                :loading="ignoringId === row.id"
+                :loading="ignoringId === proposalKey(row)"
                 @click="ignoreProposal(row)"
               >
                 忽略
@@ -181,13 +180,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Check, Close, Refresh } from '@element-plus/icons-vue'
 import client from '../api/client'
 
-// 类别配置：key 对应词库字段，apiCategory 对应接口 category 值
+// 类别配置：key 对应词库字段，apiCategory 对应接口 intentField 值，section 对应 YAML section
 const categories = [
-  { key: 'spaceTypes', label: '空间类型', apiCategory: 'space_type' },
-  { key: 'points', label: '点位', apiCategory: 'point' },
-  { key: 'budgetLevels', label: '预算等级', apiCategory: 'budget_level' },
-  { key: 'styles', label: '风格', apiCategory: 'style' },
-  { key: 'materials', label: '材料', apiCategory: 'material' }
+  { key: 'spaceTypes', label: '空间类型', apiCategory: 'space_type', section: 'space_types' },
+  { key: 'points', label: '点位', apiCategory: 'point', section: 'points' },
+  { key: 'budgetLevels', label: '预算等级', apiCategory: 'budget_level', section: 'budget_levels' },
+  { key: 'styles', label: '风格', apiCategory: 'style', section: 'styles' },
+  { key: 'materials', label: '材料', apiCategory: 'material', section: 'materials' }
 ]
 
 const activeMainTab = ref('browse')
@@ -217,6 +216,7 @@ const addAliasFormRef = ref(null)
 const addAliasForm = ref({
   category: '',
   categoryLabel: '',
+  section: '',
   canonical: '',
   alias: ''
 })
@@ -238,10 +238,9 @@ function categoryLabel(apiCategory) {
   return cat ? cat.label : apiCategory
 }
 
-// 根据 key 获取 apiCategory
-function apiCategoryByKey(key) {
-  const cat = categories.find(c => c.key === key)
-  return cat ? cat.apiCategory : ''
+// 为别名提议生成唯一 key（DTO 无 id 字段）
+function proposalKey(row) {
+  return `${row.intentField}|${row.originalValue}|${row.correctedValue}`
 }
 
 // 加载词库
@@ -283,9 +282,11 @@ function handleCategoryChange() {
 
 // 打开添加别名对话框
 function openAddAliasDialog(row) {
+  const cat = categories.find(c => c.key === activeCategory.value)
   addAliasForm.value = {
-    category: apiCategoryByKey(activeCategory.value),
-    categoryLabel: categoryLabel(apiCategoryByKey(activeCategory.value)),
+    category: cat?.apiCategory || '',
+    categoryLabel: cat?.label || '',
+    section: cat?.section || '',
     canonical: row.name,
     alias: ''
   }
@@ -297,6 +298,7 @@ function resetAddAliasForm() {
   addAliasForm.value = {
     category: '',
     categoryLabel: '',
+    section: '',
     canonical: '',
     alias: ''
   }
@@ -314,9 +316,9 @@ async function confirmAddAlias() {
 
   addingAlias.value = true
   try {
-    await client.post('/intent-taxonomy/add-alias', {
-      category: addAliasForm.value.category,
-      canonical: addAliasForm.value.canonical,
+    await client.post('/intent-taxonomy/aliases', {
+      section: addAliasForm.value.section,
+      canonicalName: addAliasForm.value.canonical,
       alias: addAliasForm.value.alias.trim()
     })
     ElMessage.success('别名添加成功')
@@ -332,17 +334,17 @@ async function confirmAddAlias() {
 
 // 应用别名提议
 async function applyProposal(row) {
-  applyingId.value = row.id
+  const key = proposalKey(row)
+  applyingId.value = key
   try {
-    await client.post('/intent-taxonomy/apply-alias', {
-      category: row.category,
-      canonical: row.canonical,
-      alias: row.proposedAlias,
-      feedbackId: row.id
+    await client.post('/intent-taxonomy/alias-proposals/apply', {
+      intentField: row.intentField,
+      originalValue: row.originalValue,
+      correctedValue: row.correctedValue
     })
     ElMessage.success('已应用别名提议')
     // 从列表移除该项
-    proposals.value = proposals.value.filter(p => p.id !== row.id)
+    proposals.value = proposals.value.filter(p => proposalKey(p) !== key)
     // 刷新词库以展示最新数据
     await loadTaxonomy()
   } catch (e) {
@@ -356,7 +358,7 @@ async function applyProposal(row) {
 async function ignoreProposal(row) {
   try {
     await ElMessageBox.confirm(
-      `确定忽略该别名提议（${row.proposedAlias}）吗？`,
+      `确定忽略该别名提议（${row.originalValue} → ${row.correctedValue}）吗？`,
       '确认忽略',
       {
         confirmButtonText: '确定',
@@ -368,10 +370,11 @@ async function ignoreProposal(row) {
     return
   }
 
-  ignoringId.value = row.id
+  const key = proposalKey(row)
+  ignoringId.value = key
   try {
     // 忽略操作：仅在前端移除，无对应后端接口
-    proposals.value = proposals.value.filter(p => p.id !== row.id)
+    proposals.value = proposals.value.filter(p => proposalKey(p) !== key)
     ElMessage.success('已忽略该提议')
   } finally {
     ignoringId.value = ''

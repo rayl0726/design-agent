@@ -13,9 +13,9 @@
 
 ## 3. Entity & Repository Changes
 
-- [ ] 3.1 Add `publicId` field to `Project`, `SessionMessage`, `Feedback`, and `ThinkingLog` entities.
-- [ ] 3.2 Add `findByPublicId(String publicId)` and `findByPublicIdAndUserId(String publicId, Long userId)` methods to each repository.
-- [ ] 3.3 Update entity creation paths to generate and set `publicId` before persistence.
+- [x] 3.1 Add `publicId` field to `Project`, `SessionMessage`, `Feedback`, and `ThinkingLog` entities.
+- [x] 3.2 Add `findByPublicId(String publicId)` and `findByPublicIdAndUserId(String publicId, Long userId)` methods to each repository.
+- [x] 3.3 Update entity creation paths to generate and set `publicId` before persistence.
 
 ## 4. Service Layer Updates
 
