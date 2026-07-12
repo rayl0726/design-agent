@@ -38,11 +38,13 @@ class BusinessFunnelControllerIntegrationTest {
         jdbcTemplate.execute("DELETE FROM java_projects");
         jdbcTemplate.execute("DELETE FROM session_messages");
         jdbcTemplate.update(
-            "INSERT INTO java_projects (id, name, status, current_level, created_at) " +
-            "VALUES ('p1', 'Project A', 'completed', 'L3', CURRENT_TIMESTAMP)");
+            "INSERT INTO java_projects (id, name, status, current_level, created_at, requirement_json) " +
+            "VALUES ('p1', 'Project A', 'completed', 'L3', CURRENT_TIMESTAMP, " +
+            "'{\"space_type\": \"购物中心中庭\", \"budget_level\": \"high\", \"style\": \"现代简约\"}')");
         jdbcTemplate.update(
-            "INSERT INTO java_projects (id, name, status, current_level, created_at) " +
-            "VALUES ('p2', 'Project B', 'draft', 'L1', CURRENT_TIMESTAMP)");
+            "INSERT INTO java_projects (id, name, status, current_level, created_at, requirement_json) " +
+            "VALUES ('p2', 'Project B', 'draft', 'L1', CURRENT_TIMESTAMP, " +
+            "'{\"space_type\": \"品牌门店\", \"budget_level\": \"medium\", \"style\": \"工业风\"}')");
         jdbcTemplate.update(
             "INSERT INTO java_projects (id, name, status, current_level, created_at) " +
             "VALUES ('p3', 'Project C', 'generating', 'L2', CURRENT_TIMESTAMP)");
@@ -105,5 +107,23 @@ class BusinessFunnelControllerIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.avgTurns").exists())
             .andExpect(jsonPath("$.totalProjects").value(2));
+    }
+
+    @Test
+    void getDimensionSpaceType_returnsDistribution() throws Exception {
+        mockMvc.perform(get("/api/admin/metrics/dimensions/space-type")
+                .header("X-Admin-Token", "test-token"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isArray())
+            .andExpect(jsonPath("$[0].dimensionValue").exists())
+            .andExpect(jsonPath("$[0].count").exists());
+    }
+
+    @Test
+    void getDimensionBudgetLevel_returnsDistribution() throws Exception {
+        mockMvc.perform(get("/api/admin/metrics/dimensions/budget-level")
+                .header("X-Admin-Token", "test-token"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isArray());
     }
 }

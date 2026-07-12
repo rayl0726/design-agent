@@ -4,11 +4,13 @@ import com.meichen.admin.dto.*;
 import com.meichen.admin.entity.ProjectRead;
 import com.meichen.admin.repository.ProjectReadRepository;
 import com.meichen.admin.repository.SessionMessageReadRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.*;
 
 @Service
 public class BusinessFunnelService {
@@ -106,5 +108,35 @@ public class BusinessFunnelService {
         long t10p = turnCounts.stream().filter(c -> c > 10).count();
 
         return new ConversationStatsDTO(avg, median, max, turnCounts.size(), t1_3, t4_6, t7_10, t10p);
+    }
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public List<DimensionDistributionDTO> getDimensionDistribution(String fieldName) {
+        List<ProjectRead> projects = projectRepo.findAll();
+        Map<String, Long> counts = new HashMap<>();
+
+        for (ProjectRead p : projects) {
+            if (p.getRequirementJson() == null) continue;
+            try {
+                Map<String, Object> req = objectMapper.readValue(
+                    p.getRequirementJson(), new TypeReference<>() {});
+                Object val = req.get(fieldName);
+                if (val != null) {
+                    counts.merge(val.toString(), 1L, Long::sum);
+                }
+            } catch (Exception e) {
+                // skip unparseable JSON
+            }
+        }
+
+        long total = counts.values().stream().mapToLong(v -> v).sum();
+        return counts.entrySet().stream()
+            .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+            .map(e -> new DimensionDistributionDTO(
+                e.getKey(), e.getValue(),
+                total > 0 ? (double) e.getValue() / total * 100 : 0
+            ))
+            .toList();
     }
 }

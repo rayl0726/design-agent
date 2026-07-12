@@ -45,4 +45,19 @@ public class BusinessFunnelController {
             @RequestParam(defaultValue = "30") int days) {
         return ResponseEntity.ok(service.getConversationStats(days));
     }
+
+    @GetMapping("/dimensions/space-type")
+    public ResponseEntity<List<DimensionDistributionDTO>> getSpaceTypeDistribution() {
+        return ResponseEntity.ok(service.getDimensionDistribution("space_type"));
+    }
+
+    @GetMapping("/dimensions/budget-level")
+    public ResponseEntity<List<DimensionDistributionDTO>> getBudgetLevelDistribution() {
+        return ResponseEntity.ok(service.getDimensionDistribution("budget_level"));
+    }
+
+    @GetMapping("/dimensions/style")
+    public ResponseEntity<List<DimensionDistributionDTO>> getStyleDistribution() {
+        return ResponseEntity.ok(service.getDimensionDistribution("style"));
+    }
 }
