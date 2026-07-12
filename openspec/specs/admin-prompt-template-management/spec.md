@@ -1,26 +1,22 @@
-# admin-prompt-template-management Specification
+## ADDED Requirements
 
-## Purpose
-TBD - created by archiving change admin-dashboard-modules. Update Purpose after archive.
-## Requirements
-### Requirement: Admin can list prompt template versions
-The system SHALL provide an admin API to list all configured prompt template versions and their metadata.
+### Requirement: Admin can view prompt template usage frequency
+The system SHALL track and report how often each prompt template version is used in image generation.
 
-#### Scenario: List templates
-- **WHEN** admin requests /api/admin/prompt-templates
-- **THEN** the system SHALL return a list of templates with name, version, space_type, and created_at
+#### Scenario: Query template usage frequency
+- **WHEN** admin requests `GET /api/admin/prompt-templates/usage?days=30`
+- **THEN** the system SHALL return for each template version: total invocations, unique projects using it, and invocation count trend over time
 
-### Requirement: Admin can view prompt template performance
-The system SHALL correlate prompt template versions with image feedback and return performance summaries.
+### Requirement: Admin can view prompt template quality trend
+The system SHALL provide quality trend analysis for prompt templates based on feedback correlation.
 
-#### Scenario: Feedback by template version
-- **WHEN** admin requests performance for template version "atrium-v2"
-- **THEN** the system SHALL return total images generated, positive feedback count, and negative feedback count
+#### Scenario: Query template quality trend
+- **WHEN** admin requests `GET /api/admin/prompt-templates/quality-trend?days=30`
+- **THEN** the system SHALL return for each template version a daily time series of: images generated, feedback received, feedback rate, and feedback tag distribution
 
-### Requirement: Admin can view rendered prompt example
-The system SHALL allow admin to preview a rendered prompt for given inputs without generating an image.
+### Requirement: Admin can compare prompt template versions
+The system SHALL provide A/B comparison metrics between different prompt template versions.
 
-#### Scenario: Preview prompt
-- **WHEN** admin posts theme "圣诞节", space_type "购物中心中庭", budget 300000
-- **THEN** the system SHALL return the rendered positive prompt and negative prompt
-
+#### Scenario: Compare two template versions
+- **WHEN** admin requests `GET /api/admin/prompt-templates/compare?v1=atrium-v1&v2=atrium-v2&days=30`
+- **THEN** the system SHALL return a side-by-side comparison of: total images, feedback count, feedback rate, positive feedback rate, negative feedback rate, and top feedback tags for each version
