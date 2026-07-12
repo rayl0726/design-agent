@@ -1,10 +1,10 @@
 ## 1. Database Schema
 
 - [x] 1.1 Create `ai_call_logs` table with columns: id, project_id, call_type (llm/vlm/embedding/image_generation), provider, model, node_name, status (success/failed/timeout/rate_limited), duration_ms, input_tokens, output_tokens, total_tokens, error_message, retry_count, created_at. Add indexes on (call_type, created_at), (provider, created_at), (project_id), (status, created_at)
-- [ ] 1.2 Create `rag_search_logs` table with columns: id, project_id, query_text, search_type (semantic/structured/fallback), result_count, duration_ms, cache_hit, timed_out, created_at. Add indexes on (search_type, created_at), (project_id)
+- [x] 1.2 Create `rag_search_logs` table with columns: id, project_id, query_text, search_type (semantic/structured/fallback), result_count, duration_ms, cache_hit, timed_out, created_at. Add indexes on (search_type, created_at), (project_id)
 - [x] 1.3 Add `http_request_logs` table for HTTP request metrics: id, method, path_pattern, status_code, duration_ms, created_at. Add index on (path_pattern, created_at)
 - [x] 1.4 Create Flyway migration script `V2026071201__create_ai_call_logs.sql`
-- [ ] 1.5 Create Flyway migration script `V2026071202__create_rag_search_logs.sql`
+- [x] 1.5 Create Flyway migration script `V2026071203__create_rag_search_logs.sql`
 - [x] 1.6 Create Flyway migration script `V2026071202__create_http_request_logs.sql`
 
 ## 2. Python-side Instrumentation (agent-core)
@@ -15,19 +15,19 @@
 - [x] 2.4 Apply `@log_ai_call('vlm')` decorator to `ZhipuVLMClient.describe()` and `ZhipuVLMClient.describe_batch()` in `vlm_client.py`
 - [x] 2.5 Apply `@log_ai_call('embedding')` decorator to `EmbeddingClient.embed()` and `EmbeddingClient.embed_batch()` in `embedding_client.py`
 - [x] 2.6 Apply `@log_ai_call('image_generation')` decorator to `ImageGenerationService.generate()` in `image_generation.py`. Log provider, model, duration, success/failure
-- [ ] 2.7 Create `log_rag_search()` function in `call_logger.py` for knowledge base search logging
-- [ ] 2.8 Add `log_rag_search()` calls in `knowledge_base.py` semantic_search(), structured_query(), and _fallback_search() methods
-- [ ] 2.9 Create agent-core API endpoint `GET /api/v1/admin/intent-traces/stats` that reads JSONL trace files and returns aggregated source distribution and confidence distribution
-- [ ] 2.10 Create agent-core API endpoint `GET /api/v1/admin/intent-traces/correction-stats` that reads JSONL traces and returns per-field correction stats
+- [x] 2.7 Create `log_rag_search()` function in `rag_logger.py` for knowledge base search logging
+- [x] 2.8 Add `log_rag_search()` calls in `knowledge_base.py` semantic_search(), structured_query() methods (with `log_rag_search_sync()` for thread context)
+- [x] 2.9 Create agent-core API endpoint `GET /api/v1/admin/intent-traces/stats` that reads JSONL trace files and returns aggregated source distribution and confidence distribution
+- [x] 2.10 Create agent-core API endpoint `GET /api/v1/admin/intent-traces/correction-stats` that reads JSONL traces and returns per-field correction stats
 
 ## 3. Java Internal API (agent-api)
 
 - [x] 3.1 Create `AiCallLog` JPA entity in agent-api mapping to `ai_call_logs` table
 - [x] 3.2 Create `AiCallLogRepository` with save method and query methods (countByTypeAndCreatedAtAfter, groupByProvider, timeSeriesQueries)
-- [ ] 3.3 Create `RagSearchLog` JPA entity mapping to `rag_search_logs` table
-- [ ] 3.4 Create `RagSearchLogRepository` with save and aggregation query methods
+- [x] 3.3 Create `RagSearchLog` JPA entity mapping to `rag_search_logs` table
+- [x] 3.4 Create `RagSearchLogRepository` with save and aggregation query methods
 - [x] 3.5 Create `InternalLogController` with `POST /api/v1/internal/ai-call-logs` endpoint accepting AI call log records from Python
-- [ ] 3.6 Create `POST /api/v1/internal/rag-search-logs` endpoint for Python RAG search logging
+- [x] 3.6 Create `POST /api/v1/internal/rag-search-logs` endpoint for Python RAG search logging
 - [x] 3.7 Add HTTP request interceptor/filter to log request method, path, status code, and duration to `http_request_logs` table. Use async write to avoid blocking
 - [x] 3.8 Configure HikariCP metrics exposure via Spring Boot Actuator `/actuator/metrics/hikaricp.*`
 - [x] 3.9 Add Spring Boot Actuator dependency to agent-api pom.xml and configure management endpoints
@@ -67,24 +67,24 @@
 
 ## 7. Admin Backend - Intent Quality Metrics
 
-- [ ] 7.1 Create `IntentQualityService` that calls agent-core `/api/v1/admin/intent-traces/stats` via WebClient
-- [ ] 7.2 Create `IntentSourceDistributionDTO` record: source, count, percentage
-- [ ] 7.3 Create `ConfidenceDistributionDTO` record: bucket, count, percentage, lowConfidenceRate
-- [ ] 7.4 Create `CorrectionRateDTO` record: intentField, totalRecognitions, correctionCount, correctionRate, topCorrectedValues
-- [ ] 7.5 Create `DialogueTurnDTO` record: turnRange, count, percentage, avgTurns, medianTurns
-- [ ] 7.6 Create `AliasProposalStatsDTO` record: totalProposals, pendingCount, appliedCount, rejectionRate
-- [ ] 7.7 Create `IntentQualityController` at `/api/admin/metrics/intent-quality` with endpoints: GET /sources, GET /confidence, GET /correction-rate, GET /dialogue-turns, GET /alias-proposals
-- [ ] 7.8 Add correction rate query from `feedbacks` table WHERE feedback_type='intent', grouped by intent_field
+- [x] 7.1 Create `IntentQualityService` that calls agent-core `/api/v1/admin/intent-traces/stats` via WebClient
+- [x] 7.2 Create `IntentSourceDistributionDTO` record: source, count, percentage
+- [x] 7.3 Create `ConfidenceDistributionDTO` record: buckets (List<ConfidenceBucket>), lowConfidenceRate
+- [x] 7.4 Create `CorrectionRateDTO` record: field, totalRecognitions, correctionCount, correctionRate, topCorrectedValues
+- [x] 7.5 Create `DialogueTurnDTO` record: turnRange, count, percentage, avgTurns, medianTurns
+- [x] 7.6 Create `AliasProposalStatsDTO` record: totalProposals, pendingCount, appliedCount, rejectionRate
+- [x] 7.7 Create `IntentQualityController` at `/api/admin/metrics/intent-quality` with endpoints: GET /sources, GET /confidence, GET /correction-rate, GET /dialogue-turns, GET /alias-proposals
+- [ ] 7.8 Add correction rate query from `feedbacks` table WHERE feedback_type='intent', grouped by intent_field (deferred — correction rate currently sourced from intent traces)
 
 ## 8. Admin Backend - Knowledge RAG Metrics
 
-- [ ] 8.1 Create `RagSearchLogRead` entity (read-only, maps to `rag_search_logs`) in admin-backend
-- [ ] 8.2 Create `RagSearchLogReadRepository` with aggregation queries
-- [ ] 8.3 Create `RagOverviewDTO` record: totalSearches, avgResultCount, avgLatencyMs, cacheHitRate, timeoutCount, fallbackRate
-- [ ] 8.4 Create `RagTimelineDTO` record: timestamp, searchCount, avgLatencyMs, cacheHitRate
-- [ ] 8.5 Create `RagInventoryDTO` record: caseCount, materialCount, imageCount, lastUpdatedAt
-- [ ] 8.6 Create `RagZeroResultDTO` record: queryText, searchCount, lastSearchedAt
-- [ ] 8.7 Create `RagMetricsController` at `/api/admin/metrics/rag` with endpoints: GET /overview, GET /timeline, GET /inventory, GET /zero-results
+- [x] 8.1 Create `RagSearchLogRead` entity (read-only, maps to `rag_search_logs`) in admin-backend
+- [x] 8.2 Create `RagSearchLogReadRepository` with aggregation queries
+- [x] 8.3 Create `RagOverviewDTO` record: totalSearches, avgResultCount, avgLatencyMs, cacheHitRate, timeoutCount, fallbackRate
+- [x] 8.4 Create `RagTimelineDTO` record: timestamp, searchCount, avgLatencyMs, cacheHitRate
+- [ ] 8.5 Create `RagInventoryDTO` record: caseCount, materialCount, imageCount, lastUpdatedAt (deferred — inventory endpoint returns placeholder, needs Milvus stats)
+- [x] 8.6 Create `RagZeroResultDTO` record: queryText, searchCount, lastSearchedAt
+- [x] 8.7 Create `RagMetricsController` at `/api/admin/metrics/rag` with endpoints: GET /overview, GET /timeline, GET /inventory, GET /zero-results
 
 ## 9. Admin Backend - System Health Metrics
 
@@ -144,13 +144,13 @@
 
 ## 15. Admin Frontend - Intent Quality Monitoring Page
 
-- [ ] 15.1 Create `IntentQuality.vue` page
-- [ ] 15.2 Add recognition source distribution pie chart
-- [ ] 15.3 Add confidence distribution histogram
-- [ ] 15.4 Add correction rate by field bar chart with top corrected values table
-- [ ] 15.5 Add dialogue turns distribution bar chart
-- [ ] 15.6 Add alias proposal statistics cards
-- [ ] 15.7 Add router entry and navigation menu item
+- [x] 15.1 Create `IntentQuality.vue` page
+- [x] 15.2 Add recognition source distribution pie chart
+- [x] 15.3 Add confidence distribution histogram
+- [x] 15.4 Add correction rate by field bar chart with top corrected values table
+- [ ] 15.5 Add dialogue turns distribution bar chart (deferred — backend endpoint is placeholder)
+- [x] 15.6 Add alias proposal statistics cards
+- [x] 15.7 Add router entry and navigation menu item
 
 ## 16. Admin Frontend - System Health Monitoring Page
 
@@ -176,12 +176,12 @@
 - [x] 18.1 Write integration tests for `AiModelMetricsController` all endpoints
 - [ ] 18.2 Write integration tests for `ImageGenMetricsController` all endpoints
 - [x] 18.3 Write integration tests for `BusinessFunnelController` all endpoints
-- [ ] 18.4 Write integration tests for `IntentQualityController` all endpoints
-- [ ] 18.5 Write integration tests for `RagMetricsController` all endpoints
+- [x] 18.4 Write integration tests for `IntentQualityController` all endpoints
+- [x] 18.5 Write integration tests for `RagMetricsController` all endpoints
 - [x] 18.6 Write integration tests for `SystemHealthController` all endpoints
 - [x] 18.7 Write unit tests for Python `@log_ai_call` decorator: verify log record is created with correct fields
-- [ ] 18.8 Write unit tests for Python `log_rag_search()`: verify log record is created
-- [ ] 18.9 Write unit tests for agent-core intent-traces stats endpoint
+- [x] 18.8 Write unit tests for Python `log_rag_search()`: verify log record is created
+- [x] 18.9 Write unit tests for agent-core intent-traces stats endpoint
 - [ ] 18.10 End-to-end test: trigger a full workflow and verify all metrics endpoints return expected data
 - [x] 18.11 Verify frontend pages render correctly with real data
 - [ ] 18.12 Performance test: verify metrics queries complete under 500ms with 100K rows in ai_call_logs
