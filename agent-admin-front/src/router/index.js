@@ -30,6 +30,12 @@ const routes = [
         name: 'IntentTaxonomy',
         component: () => import('../views/IntentTaxonomy.vue'),
         meta: { title: '意图词库', icon: 'Collection' }
+      },
+      {
+        path: 'ai-monitoring',
+        name: 'AiModelMonitoring',
+        component: () => import('../views/AiModelMonitoring.vue'),
+        meta: { title: 'AI 模型监控', icon: 'Monitor' }
       }
     ]
   }

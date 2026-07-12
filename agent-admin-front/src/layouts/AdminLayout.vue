@@ -68,7 +68,8 @@ const menuItems = [
   { path: '/dashboard', title: '指标看板', icon: 'Odometer' },
   { path: '/feedbacks', title: '反馈管理', icon: 'ChatDotRound' },
   { path: '/prompt-templates', title: 'Prompt 模板', icon: 'Document' },
-  { path: '/intent-taxonomy', title: '意图词库', icon: 'Collection' }
+  { path: '/intent-taxonomy', title: '意图词库', icon: 'Collection' },
+  { path: '/ai-monitoring', title: 'AI 模型监控', icon: 'Monitor' }
 ]
 
 const activeMenu = computed(() => route.path)
