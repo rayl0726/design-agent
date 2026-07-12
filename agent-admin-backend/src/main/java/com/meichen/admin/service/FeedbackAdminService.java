@@ -13,9 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class FeedbackAdminService {
 
     private final FeedbackReadRepository repository;
+    private final AuditLogService auditLogService;
 
-    public FeedbackAdminService(FeedbackReadRepository repository) {
+    public FeedbackAdminService(FeedbackReadRepository repository, AuditLogService auditLogService) {
         this.repository = repository;
+        this.auditLogService = auditLogService;
     }
 
     public Page<FeedbackDTO> listFeedbacks(String feedbackType, String category, Boolean processed, Pageable pageable) {
@@ -34,6 +36,8 @@ public class FeedbackAdminService {
             feedback.setNotes(request.notes());
         }
         repository.save(feedback);
+        String notes = request != null && request.notes() != null ? request.notes() : "";
+        auditLogService.recordSuccess("PROCESS_FEEDBACK", id, "notes=" + notes);
         return toDTO(feedback);
     }
 

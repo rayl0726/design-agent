@@ -35,7 +35,7 @@ class IntentTaxonomyAdminServiceTest {
             "  - name: \"现代\"\n" +
             "    aliases: [\"modern\"]\n"
         );
-        service = new IntentTaxonomyAdminService(feedbackRepo, tempDir.getAbsolutePath());
+        service = new IntentTaxonomyAdminService(feedbackRepo, tempDir.getAbsolutePath(), mock(AuditLogService.class));
     }
 
     @Test

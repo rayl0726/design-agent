@@ -25,7 +25,7 @@ class FeedbackAdminServiceTest {
     @BeforeEach
     void setUp() {
         repository = mock(FeedbackReadRepository.class);
-        service = new FeedbackAdminService(repository);
+        service = new FeedbackAdminService(repository, mock(AuditLogService.class));
     }
 
     @Test

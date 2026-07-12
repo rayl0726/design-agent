@@ -20,13 +20,16 @@ public class IntentTaxonomyAdminService {
     private final FeedbackReadRepository feedbackRepo;
     private final String dataDir;
     private final ObjectMapper yamlMapper;
+    private final AuditLogService auditLogService;
 
     public IntentTaxonomyAdminService(
             FeedbackReadRepository feedbackRepo,
-            @Value("${admin.agent-core.data-dir}") String dataDir) {
+            @Value("${admin.agent-core.data-dir}") String dataDir,
+            AuditLogService auditLogService) {
         this.feedbackRepo = feedbackRepo;
         this.dataDir = dataDir;
         this.yamlMapper = new YAMLMapper();
+        this.auditLogService = auditLogService;
     }
 
     @SuppressWarnings("unchecked")
@@ -101,9 +104,14 @@ public class IntentTaxonomyAdminService {
             }
             if (!found) throw new IllegalArgumentException("Canonical value not found: " + request.correctedValue());
             writeYamlAtomically(file, yaml);
+            auditLogService.recordSuccess("APPLY_ALIAS",
+                request.intentField(),
+                "original=" + request.originalValue() + " corrected=" + request.correctedValue());
         } catch (IllegalArgumentException e) {
+            auditLogService.recordFailure("APPLY_ALIAS", request.intentField(), e.getMessage());
             throw e;
         } catch (Exception e) {
+            auditLogService.recordFailure("APPLY_ALIAS", request.intentField(), e.getMessage());
             throw new RuntimeException("Failed to apply alias: " + e.getMessage(), e);
         }
     }
@@ -129,9 +137,14 @@ public class IntentTaxonomyAdminService {
             }
             if (!found) throw new IllegalArgumentException("Canonical name not found: " + request.canonicalName());
             writeYamlAtomically(file, yaml);
+            auditLogService.recordSuccess("ADD_ALIAS",
+                request.section(),
+                "canonical=" + request.canonicalName() + " alias=" + request.alias());
         } catch (IllegalArgumentException e) {
+            auditLogService.recordFailure("ADD_ALIAS", request.section(), e.getMessage());
             throw e;
         } catch (Exception e) {
+            auditLogService.recordFailure("ADD_ALIAS", request.section(), e.getMessage());
             throw new RuntimeException("Failed to add alias: " + e.getMessage(), e);
         }
     }
