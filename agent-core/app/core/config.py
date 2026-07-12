@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     pollinations_base_url: str = "https://image.pollinations.ai"
     pollinations_timeout: int = 60
     comfyui_base_url: str = "http://localhost:8188"
+    agent_api_base_url: str = "http://localhost:8080"
 
     upload_dir: str = str(_DESIGN_DATA / "uploads")
     image_cache_dir: str = str(_DESIGN_DATA / "images")
