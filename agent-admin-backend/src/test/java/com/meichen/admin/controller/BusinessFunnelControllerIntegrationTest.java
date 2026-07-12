@@ -126,4 +126,31 @@ class BusinessFunnelControllerIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$").isArray());
     }
+
+    @Test
+    void getAbandonment_returnsOldDrafts() throws Exception {
+        mockMvc.perform(get("/api/admin/metrics/funnel/abandonment")
+                .param("days", "0")
+                .header("X-Admin-Token", "test-token"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isArray());
+    }
+
+    @Test
+    void getDimensions_allThree() throws Exception {
+        mockMvc.perform(get("/api/admin/metrics/dimensions/space-type")
+                .header("X-Admin-Token", "test-token"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isArray());
+
+        mockMvc.perform(get("/api/admin/metrics/dimensions/budget-level")
+                .header("X-Admin-Token", "test-token"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isArray());
+
+        mockMvc.perform(get("/api/admin/metrics/dimensions/style")
+                .header("X-Admin-Token", "test-token"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isArray());
+    }
 }

@@ -41,11 +41,11 @@ class MetricsAdminControllerIntegrationTest {
         jdbcTemplate.execute("DELETE FROM stage_log_stats");
 
         jdbcTemplate.update(
-            "INSERT INTO java_projects (id, name, status, current_level) " +
-            "VALUES ('proj-1', 'Test Project 1', 'completed', 'L3')");
+            "INSERT INTO java_projects (id, name, status, current_level, created_at) " +
+            "VALUES ('proj-1', 'Test Project 1', 'completed', 'L3', CURRENT_TIMESTAMP)");
         jdbcTemplate.update(
-            "INSERT INTO java_projects (id, name, status, current_level) " +
-            "VALUES ('proj-2', 'Test Project 2', 'in_progress', 'L1')");
+            "INSERT INTO java_projects (id, name, status, current_level, created_at) " +
+            "VALUES ('proj-2', 'Test Project 2', 'in_progress', 'L1', CURRENT_TIMESTAMP)");
 
         jdbcTemplate.update(
             "INSERT INTO feedbacks (id, project_id, feedback_type, category, processed, tag, public_id) " +
@@ -96,5 +96,25 @@ class MetricsAdminControllerIntegrationTest {
     void getOverview_withoutToken_returns401() throws Exception {
         mockMvc.perform(get("/api/admin/metrics/overview"))
             .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void getOverviewWithHours_returnsFilteredCounts() throws Exception {
+        mockMvc.perform(get("/api/admin/metrics/overview")
+                .param("hours", "24")
+                .header("X-Admin-Token", "test-token"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.projectCount").value(2))
+            .andExpect(jsonPath("$.activeProjectsInWindow").exists())
+            .andExpect(jsonPath("$.completedProjectsInWindow").exists());
+    }
+
+    @Test
+    void getProjectTrend_returnsTimeSeries() throws Exception {
+        mockMvc.perform(get("/api/admin/metrics/trend/projects")
+                .param("days", "30")
+                .header("X-Admin-Token", "test-token"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isArray());
     }
 }
