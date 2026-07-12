@@ -25,21 +25,21 @@
 - [x] 4.1 Implement `GET /api/admin/feedbacks` with pagination and filters (category, type, processed status)
 - [x] 4.2 Implement `POST /api/admin/feedbacks/{id}/process` to mark feedback as processed with notes
 - [x] 4.3 Add DTOs and mapper for feedback records including intent correction payload
-- [ ] 4.4 Add integration tests for feedback list and mark-processed endpoints
+- [x] 4.4 Add integration tests for feedback list and mark-processed endpoints
 
 ## 5. System Metrics API
 
 - [x] 5.1 Implement `GET /api/admin/metrics/overview` returning project/image/feedback/session counts
 - [x] 5.2 Implement `GET /api/admin/metrics/stages` returning average and p95 stage durations for the last 24 hours
 - [x] 5.3 Implement `GET /api/admin/metrics/feedback-distribution` returning counts grouped by tag and category
-- [ ] 5.4 Add integration tests for metrics endpoints
+- [x] 5.4 Add integration tests for metrics endpoints
 
 ## 6. Prompt Template Management API
 
 - [x] 6.1 Implement `GET /api/admin/prompt-templates` listing template metadata (name, version, space_type, created_at)
 - [x] 6.2 Implement `GET /api/admin/prompt-templates/{name}/performance` returning image count and feedback polarity by version
 - [x] 6.3 Implement `POST /api/admin/prompt-templates/preview` returning rendered positive and negative prompts without image generation
-- [ ] 6.4 Add integration tests for prompt template list, performance, and preview endpoints
+- [x] 6.4 Add integration tests for prompt template list, performance, and preview endpoints
 
 ## 7. Intent Lexicon Management API
 
@@ -48,7 +48,7 @@
 - [x] 7.3 Implement `POST /api/admin/intent-taxonomy/alias-proposals/apply` to append approved aliases to the YAML file
 - [x] 7.4 Implement `POST /api/admin/intent-taxonomy/aliases` to manually add an alias to a taxonomy entry
 - [ ] 7.5 Use `ruamel.yaml` or equivalent to preserve YAML formatting and comments when writing
-- [ ] 7.6 Add integration tests for taxonomy read, proposals, and apply endpoints
+- [x] 7.6 Add integration tests for taxonomy read, proposals, and apply endpoints
 
 ## 8. Admin Frontend Pages
 
