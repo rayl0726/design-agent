@@ -9,6 +9,7 @@ import httpx
 import numpy as np
 
 from app.core.config import settings
+from app.services.call_logger import log_ai_call
 
 
 class EmbeddingProvider(Protocol):
@@ -25,6 +26,7 @@ class OllamaEmbeddingProvider:
         self.model = model
         self.client = httpx.AsyncClient(timeout=httpx.Timeout(120.0))
 
+    @log_ai_call("embedding", "ollama")
     async def embed(self, text: str) -> list[float]:
         payload = {"model": self.model, "prompt": text}
         resp = await self.client.post(f"{self.base_url}/api/embeddings", json=payload)

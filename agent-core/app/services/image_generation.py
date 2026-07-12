@@ -9,6 +9,7 @@ from urllib.parse import quote
 import httpx
 
 from app.core.config import settings
+from app.services.call_logger import log_ai_call
 from app.services.negative_prompt_builder import NegativePromptBuilder
 from app.services.prompt_template_loader import PromptTemplateLoader
 from app.services.prompt_template_renderer import PromptTemplateRenderer
@@ -25,6 +26,7 @@ class PollinationsProvider(ImageGenerationProvider):
         self.base_url = base_url.rstrip("/")
         self.client = httpx.AsyncClient(timeout=httpx.Timeout(timeout))
 
+    @log_ai_call("image_gen", "pollinations")
     async def generate(self, prompt: str, aspect_ratio: str = "16:9", style: str = "realistic") -> str:
         # Pollinations 使用 URL 参数，添加重试以应对偶发 500
         encoded = quote(prompt)
@@ -101,6 +103,7 @@ class ZhipuProvider(ImageGenerationProvider):
         self.model = model
         self.client = httpx.AsyncClient(timeout=httpx.Timeout(180.0))
 
+    @log_ai_call("image_gen", "zhipu")
     async def generate(self, prompt: str, aspect_ratio: str = "16:9", style: str = "realistic") -> str:
         size = "1024x576" if aspect_ratio == "16:9" else "576x1024"
         payload = {
@@ -148,6 +151,7 @@ class SiliconFlowProvider(ImageGenerationProvider):
         self.model = model
         self.client = httpx.AsyncClient(timeout=httpx.Timeout(180.0))
 
+    @log_ai_call("image_gen", "siliconflow")
     async def generate(self, prompt: str, aspect_ratio: str = "16:9", style: str = "realistic") -> str:
         size = "1024x576" if aspect_ratio == "16:9" else "576x1024"
         payload = {

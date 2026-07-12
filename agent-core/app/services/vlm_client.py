@@ -6,6 +6,7 @@ from pathlib import Path
 import httpx
 
 from app.core.config import settings
+from app.services.call_logger import log_ai_call
 
 
 class BaseVLMClient:
@@ -90,6 +91,7 @@ class ZhipuVLMClient(BaseVLMClient):
         with open(path, "rb") as f:
             return base64.b64encode(f.read()).decode("utf-8")
 
+    @log_ai_call("vlm", "zhipu")
     async def describe(
         self,
         image_path: str | Path,
@@ -125,6 +127,8 @@ class ZhipuVLMClient(BaseVLMClient):
             )
             resp.raise_for_status()
             data = resp.json()
+            usage = data.get("usage", {})
+            self._last_usage = usage
             return data.get("choices", [{}])[0].get("message", {}).get("content", "")
         except httpx.HTTPStatusError as e:
             print(f"Zhipu VLM HTTP error: {e.response.status_code} - {e.response.text[:300]}")

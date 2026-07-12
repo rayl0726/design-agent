@@ -8,6 +8,7 @@ from typing import AsyncIterator
 import httpx
 
 from app.core.config import settings
+from app.services.call_logger import log_ai_call
 
 
 class LLMProvider(ABC):
@@ -125,6 +126,7 @@ class ZhipuProvider(LLMProvider):
         messages.append({"role": "user", "content": user_prompt})
         return messages
 
+    @log_ai_call("llm", "zhipu")
     async def complete(
         self,
         system_prompt: str,
@@ -132,6 +134,7 @@ class ZhipuProvider(LLMProvider):
         json_mode: bool = False,
         temperature: float = 0.7,
     ) -> str:
+        self._last_usage = None
         payload: dict = {
             "model": self.model,
             "messages": self._build_messages(system_prompt, user_prompt),
@@ -156,6 +159,8 @@ class ZhipuProvider(LLMProvider):
                 print(f"DEBUG: Zhipu response status: {resp.status_code}")
                 resp.raise_for_status()
                 data = resp.json()
+                usage = data.get("usage", {})
+                self._last_usage = usage
                 return data.get("choices", [{}])[0].get("message", {}).get("content", "")
             except httpx.HTTPStatusError as e:
                 last_exception = e
