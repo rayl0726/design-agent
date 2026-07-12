@@ -88,8 +88,8 @@ def log_ai_call(call_type: str, provider: str):
                     log_payload["node_name"] = node_name
 
                 try:
-                    await _send_log(**log_payload)
-                except Exception:
+                    asyncio.create_task(_send_log(**log_payload))
+                except RuntimeError:
                     pass
 
         return wrapper

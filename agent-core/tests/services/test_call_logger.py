@@ -24,6 +24,7 @@ async def test_decorator_success_logs_correctly():
     with patch("app.services.call_logger._send_log", side_effect=fake_send):
         client = FakeClient()
         result = await client.complete("sys", "user")
+        await asyncio.sleep(0)
 
     assert result == "result"
     assert captured["call_type"] == "llm"
@@ -55,6 +56,7 @@ async def test_decorator_failed_logs_error():
         client = FakeClient()
         with pytest.raises(RuntimeError):
             await client.complete("sys", "user")
+        await asyncio.sleep(0)
 
     assert captured["status"] == "failed"
     assert "API error" in captured["error_message"]
@@ -76,6 +78,7 @@ async def test_decorator_swallows_send_errors():
     with patch("app.services.call_logger._send_log", side_effect=failing_send):
         client = FakeClient()
         result = await client.complete("sys", "user")
+        await asyncio.sleep(0)
 
     assert result == "ok"
 
