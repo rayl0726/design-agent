@@ -3,7 +3,9 @@ from __future__ import annotations
 import pytest
 
 from app.agents.input_parser import TextParser
-from app.services.intent_recognition_result import ValidatedIntent, FieldSource
+from app.services.intent_llm_extractor import IntentLLMExtractor
+from app.services.intent_recognition_result import ValidatedIntent, RecognizedField, FieldSource
+from app.services.taxonomy_loader import load_taxonomy
 
 
 class TestDictToValidatedIntent:
@@ -83,3 +85,94 @@ class TestDictToValidatedIntent:
         assert len(result.allowed_materials) == 0
         assert len(result.special_requirements) == 0
         assert len(result.points) == 0
+
+
+class _StubLLM:
+    """记录收到的 prompt，返回空输出。"""
+    def __init__(self):
+        self.last_prompt = ""
+
+    async def complete(self, system_prompt, user_prompt, json_mode=False, temperature=0.7):
+        self.last_prompt = user_prompt
+        return '{"space_type": null, "theme": null}'
+
+
+class TestBuildPromptWithContext:
+    @pytest.mark.asyncio
+    async def test_prompt_without_context_has_no_context_sections(self):
+        extractor = IntentLLMExtractor(
+            taxonomy=load_taxonomy(),
+            llm_client=_StubLLM(),
+        )
+        await extractor.extract("购物中心中庭")
+        prompt = extractor._llm_client.last_prompt
+        assert "之前已识别的需求" not in prompt
+        assert "最近的对话" not in prompt
+        assert "对话历史摘要" not in prompt
+
+    @pytest.mark.asyncio
+    async def test_prompt_with_previous_intent_has_context_section(self):
+        extractor = IntentLLMExtractor(
+            taxonomy=load_taxonomy(),
+            llm_client=_StubLLM(),
+        )
+        previous = ValidatedIntent(
+            theme=RecognizedField(name="theme", value="新春国潮", source=FieldSource.LLM, confidence=0.85),
+            style=RecognizedField(name="style", value="国潮", source=FieldSource.LLM, confidence=1.0),
+        )
+        await extractor.extract("购物中心中庭", previous_intent=previous)
+        prompt = extractor._llm_client.last_prompt
+        assert "之前已识别的需求" in prompt
+        assert "新春国潮" in prompt
+        assert "国潮" in prompt
+
+    @pytest.mark.asyncio
+    async def test_prompt_with_recent_messages_has_dialogue_section(self):
+        extractor = IntentLLMExtractor(
+            taxonomy=load_taxonomy(),
+            llm_client=_StubLLM(),
+        )
+        await extractor.extract(
+            "预算100万",
+            recent_messages=["新春国潮国潮风格", "预算加到100万"],
+        )
+        prompt = extractor._llm_client.last_prompt
+        assert "最近的对话" in prompt
+        assert "新春国潮国潮风格" in prompt
+        assert "预算加到100万" in prompt
+
+    @pytest.mark.asyncio
+    async def test_prompt_with_summary_has_history_section(self):
+        extractor = IntentLLMExtractor(
+            taxonomy=load_taxonomy(),
+            llm_client=_StubLLM(),
+        )
+        summary = "第1轮：主题=新春国潮，风格=国潮\n第2轮：空间类型=购物中心中庭"
+        await extractor.extract("预算100万", conversation_summary=summary)
+        prompt = extractor._llm_client.last_prompt
+        assert "对话历史摘要" in prompt
+        assert "主题=新春国潮" in prompt
+
+    @pytest.mark.asyncio
+    async def test_prompt_with_empty_previous_intent_no_section(self):
+        extractor = IntentLLMExtractor(
+            taxonomy=load_taxonomy(),
+            llm_client=_StubLLM(),
+        )
+        previous = ValidatedIntent()  # 所有字段为 None/空
+        await extractor.extract("购物中心中庭", previous_intent=previous)
+        prompt = extractor._llm_client.last_prompt
+        assert "之前已识别的需求" not in prompt
+
+    @pytest.mark.asyncio
+    async def test_recent_messages_truncated_to_200_chars(self):
+        extractor = IntentLLMExtractor(
+            taxonomy=load_taxonomy(),
+            llm_client=_StubLLM(),
+        )
+        long_msg = "A" * 300
+        await extractor.extract("测试", recent_messages=[long_msg])
+        prompt = extractor._llm_client.last_prompt
+        # 消息被截断到 200 字符
+        assert "A" * 200 in prompt
+        assert "A" * 201 not in prompt
