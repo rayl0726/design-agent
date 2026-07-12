@@ -11,8 +11,10 @@ node_modules/
 design-data
 agent-core/.venv/
 agent-core/meichen_ai.egg-info/
+agent-core/data/intent_traces/
 __pycache__/
 *.pyc
 .pytest_cache/
 .env.example
+.vite/
 
