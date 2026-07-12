@@ -47,7 +47,7 @@ class BusinessFunnelControllerIntegrationTest {
             "'{\"space_type\": \"品牌门店\", \"budget_level\": \"medium\", \"style\": \"工业风\"}')");
         jdbcTemplate.update(
             "INSERT INTO java_projects (id, name, status, current_level, created_at) " +
-            "VALUES ('p3', 'Project C', 'generating', 'L2', CURRENT_TIMESTAMP)");
+            "VALUES ('p3', 'Project C', 'L2_PENDING', 'L2', CURRENT_TIMESTAMP)");
 
         jdbcTemplate.update(
             "INSERT INTO session_messages (id, project_id, role, message_type, content, public_id) " +

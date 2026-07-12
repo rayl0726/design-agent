@@ -14,6 +14,8 @@ import java.util.List;
 @Service
 public class MetricsAdminService {
 
+    private static final List<String> COMPLETED_STATUSES = List.of("completed");
+
     private final ProjectReadRepository projectRepo;
     private final FeedbackReadRepository feedbackRepo;
     private final StageLogReadRepository stageLogRepo;
@@ -54,7 +56,7 @@ public class MetricsAdminService {
             stageLogRepo.count(),
             projectRepo.countProjectsWithFeedback(),
             projectRepo.countByCreatedAtAfter(since),
-            projectRepo.countByStatusAndCreatedAtAfter("completed", since)
+            projectRepo.countByStatusInAndCreatedAtAfter(COMPLETED_STATUSES, since)
         );
     }
 

@@ -15,6 +15,10 @@ import java.util.*;
 @Service
 public class BusinessFunnelService {
 
+    private static final List<String> DRAFT_STATUSES = List.of("draft", "INIT");
+    private static final List<String> GENERATING_STATUSES = List.of("L2_PENDING", "RECOMMENDATION_PENDING");
+    private static final List<String> COMPLETED_STATUSES = List.of("completed");
+
     private final ProjectReadRepository projectRepo;
     private final SessionMessageReadRepository sessionMessageRepo;
 
@@ -26,9 +30,9 @@ public class BusinessFunnelService {
 
     public ProjectFunnelDTO getFunnel(int days) {
         LocalDateTime since = LocalDateTime.now().minusDays(days);
-        long draft = projectRepo.countByStatusAndCreatedAtAfter("draft", since);
-        long generating = projectRepo.countByStatusAndCreatedAtAfter("generating", since);
-        long completed = projectRepo.countByStatusAndCreatedAtAfter("completed", since);
+        long draft = projectRepo.countByStatusInAndCreatedAtAfter(DRAFT_STATUSES, since);
+        long generating = projectRepo.countByStatusInAndCreatedAtAfter(GENERATING_STATUSES, since);
+        long completed = projectRepo.countByStatusInAndCreatedAtAfter(COMPLETED_STATUSES, since);
         long total = draft + generating + completed;
 
         double d2gRate = draft + generating > 0 ? (double) generating / (draft + generating) * 100 : 0;
@@ -40,7 +44,7 @@ public class BusinessFunnelService {
 
     public List<ProjectAbandonmentDTO> getAbandonment(int days) {
         LocalDateTime cutoff = LocalDateTime.now().minusDays(days);
-        List<ProjectRead> abandoned = projectRepo.findAbandonedDrafts(cutoff);
+        List<ProjectRead> abandoned = projectRepo.findAbandonedDrafts(DRAFT_STATUSES, cutoff);
         return abandoned.stream().map(p -> new ProjectAbandonmentDTO(
             p.getId(),
             p.getName(),
@@ -64,7 +68,7 @@ public class BusinessFunnelService {
 
     public ProjectDurationDTO getDuration(int days) {
         LocalDateTime since = LocalDateTime.now().minusDays(days);
-        List<ProjectRead> completed = projectRepo.findByStatusAndCreatedAtAfter("completed", since);
+        List<ProjectRead> completed = projectRepo.findByStatusInAndCreatedAtAfter(COMPLETED_STATUSES, since);
         if (completed.isEmpty()) {
             return new ProjectDurationDTO(0, 0, 0, 0, 0);
         }
