@@ -47,7 +47,7 @@
 - [x] 7.2 Implement `GET /api/admin/intent-taxonomy/alias-proposals` returning proposals aggregated from feedback corrections
 - [x] 7.3 Implement `POST /api/admin/intent-taxonomy/alias-proposals/apply` to append approved aliases to the YAML file
 - [x] 7.4 Implement `POST /api/admin/intent-taxonomy/aliases` to manually add an alias to a taxonomy entry
-- [ ] 7.5 Use `ruamel.yaml` or equivalent to preserve YAML formatting and comments when writing
+- [x] 7.5 Use `ruamel.yaml` or equivalent to preserve YAML formatting and comments when writing
 - [x] 7.6 Add integration tests for taxonomy read, proposals, and apply endpoints
 
 ## 8. Admin Frontend Pages
