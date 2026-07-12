@@ -18,7 +18,7 @@
 - [x] 3.1 Create read-only JPA entities for `projects`, `generated_images`, `feedbacks`, and `stage_logs` mapped to existing tables
 - [x] 3.2 Create Spring Data repositories for paginated and filtered queries
 - [x] 3.3 Add a `@Transactional(readOnly = true)` service layer for data aggregation
-- [ ] 3.4 Add audit logging for any write operation performed by admin endpoints
+- [x] 3.4 Add audit logging for any write operation performed by admin endpoints
 
 ## 4. Feedback Management API
 
