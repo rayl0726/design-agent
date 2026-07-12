@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import asyncio
+import time
 from typing import Any
 
 from app.core.config import settings
 from app.models.database import get_session
 from app.models.project import DesignCase, MaterialPrice
 from app.services.embedding_client import embedding_client
+from app.services.rag_logger import log_rag_search
 
 
 class KnowledgeBase:
@@ -83,7 +86,9 @@ class KnowledgeBase:
         space_type: str | None = None,
         budget_level: str | None = None,
         top_k: int = 5,
+        project_id: str | None = None,
     ) -> list[dict[str, Any]]:
+        start = time.monotonic()
         try:
             self._ensure_client()
             if self._milvus_available:
@@ -119,12 +124,54 @@ class KnowledgeBase:
                                 "summary": result.entity.get("summary"),
                             }
                         )
+                    duration_ms = int((time.monotonic() - start) * 1000)
+                    await log_rag_search(
+                        project_id=project_id,
+                        query_text=query,
+                        search_type="semantic",
+                        result_count=len(hits),
+                        duration_ms=duration_ms,
+                        cache_hit=False,
+                        timed_out=False,
+                    )
                     return hits
                 except Exception:
-                    return self._fallback_search(query, space_type, budget_level, top_k)
+                    fallback_results = self._fallback_search(query, space_type, budget_level, top_k)
+                    duration_ms = int((time.monotonic() - start) * 1000)
+                    await log_rag_search(
+                        project_id=project_id,
+                        query_text=query,
+                        search_type="fallback",
+                        result_count=len(fallback_results),
+                        duration_ms=duration_ms,
+                        cache_hit=False,
+                        timed_out=True,
+                    )
+                    return fallback_results
             else:
-                return self._fallback_search(query, space_type, budget_level, top_k)
+                results = self._fallback_search(query, space_type, budget_level, top_k)
+                duration_ms = int((time.monotonic() - start) * 1000)
+                await log_rag_search(
+                    project_id=project_id,
+                    query_text=query,
+                    search_type="fallback",
+                    result_count=len(results),
+                    duration_ms=duration_ms,
+                    cache_hit=False,
+                    timed_out=False,
+                )
+                return results
         except Exception:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            await log_rag_search(
+                project_id=project_id,
+                query_text=query,
+                search_type="semantic",
+                result_count=0,
+                duration_ms=duration_ms,
+                cache_hit=False,
+                timed_out=True,
+            )
             return []
 
     def _fallback_search(
@@ -173,7 +220,9 @@ class KnowledgeBase:
         material_name: str | None = None,
         category: str | None = None,
         limit: int = 10,
+        project_id: str | None = None,
     ) -> list[dict[str, Any]]:
+        start = time.monotonic()
         db = get_session()
         try:
             query = db.query(MaterialPrice)
@@ -182,7 +231,7 @@ class KnowledgeBase:
             if category:
                 query = query.filter(MaterialPrice.category == category)
             rows = query.limit(limit).all()
-            return [
+            results = [
                 {
                     "id": r.id,
                     "name": r.name,
@@ -195,6 +244,25 @@ class KnowledgeBase:
                 }
                 for r in rows
             ]
+            duration_ms = int((time.monotonic() - start) * 1000)
+            # Fire-and-forget logging. structured_query is sync, so schedule the
+            # async log_rag_search coroutine on the running event loop if there
+            # is one; if no loop is running, swallow the RuntimeError.
+            try:
+                asyncio.create_task(
+                    log_rag_search(
+                        project_id=project_id,
+                        query_text=material_name or "",
+                        search_type="structured",
+                        result_count=len(results),
+                        duration_ms=duration_ms,
+                        cache_hit=False,
+                        timed_out=False,
+                    )
+                )
+            except RuntimeError:
+                pass
+            return results
         finally:
             db.close()
 
