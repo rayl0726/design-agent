@@ -13,11 +13,12 @@ from app.services.doc_generator import doc_generator
 from app.services.negative_prompt_builder import NegativePromptBuilder
 from app.services.prompt_template_loader import PromptTemplateLoader
 from app.services.prompt_template_renderer import PromptTemplateRenderer
-from app.api.endpoints import debug, learning
+from app.api.endpoints import debug, learning, admin_metrics
 
 router = APIRouter()
 router.include_router(learning.router)
 router.include_router(debug.router)
+router.include_router(admin_metrics.router)
 
 _prompt_template_loader = PromptTemplateLoader()
 _prompt_template_renderer = PromptTemplateRenderer()
