@@ -4,8 +4,10 @@
 
 ## 架构
 
-- **Java 协调层** (`agent-api/`): Spring Boot + 自研 DAG 调度器，负责工作流编排、状态管理、REST API
-- **Python AI 服务** (`agent-core/`): FastAPI，负责 LLM/VLM 推理、RAG 检索、图像生成、文档生成
+- **Java 协调层** (`agent-api/`): Spring Boot + 自研 DAG 调度器，负责工作流编排、状态管理、REST API（端口 8080）
+- **Python AI 服务** (`agent-core/`): FastAPI，负责 LLM/VLM 推理、RAG 检索、图像生成、文档生成（端口 8000）
+- **管理后台后端** (`agent-admin-backend/`): Spring Boot 只读访问 MySQL，提供反馈管理、系统指标、Prompt 模板、意图词库管理 API（端口 8081，静态 Token 认证）
+- **管理后台前端** (`agent-admin-front/`): Vue 3 + Element Plus，提供管理后台可视化界面（端口 8082）
 - **向量数据库**: Milvus (Docker)
 - **结构化数据库**: MySQL
 
@@ -42,10 +44,28 @@ cd agent-api
 ./mvnw spring-boot:run
 ```
 
-### 5. 访问 API 文档
+### 5. 启动管理后台后端（可选）
+
+```bash
+cd agent-admin-backend
+mvn spring-boot:run
+# 默认端口 8081，认证 Token: admin-secret-2026（可在 application.yml 中配置）
+```
+
+### 6. 启动管理后台前端（可选）
+
+```bash
+cd agent-admin-front
+npm install
+npm run dev
+# 默认端口 8082，访问 http://localhost:8082
+```
+
+### 7. 访问 API 文档
 
 - Java 协调层: http://localhost:8080/swagger-ui.html
 - Python AI 服务: http://localhost:8000/docs
+- 管理后台: http://localhost:8082
 
 ## 输入支持
 
@@ -69,9 +89,11 @@ cd agent-api
 | 层 | 技术 |
 |---|---|
 | 协调层 | Java 17, Spring Boot 3.2, MySQL |
-| AI 服务 | Python 3.11, FastAPI, Ollama |
-| LLM | Qwen2.5 14B/32B, Qwen2.5-VL |
-| Embedding | bge-m3 |
+| AI 服务 | Python 3.11, FastAPI, Ollama (bge-m3) |
+| LLM/VLM | 智谱 GLM-4.7-Flash |
+| Embedding | bge-m3 (Ollama 本地) |
 | 向量库 | Milvus 2.4 |
-| 图像生成 | Pollinations.AI (免费) |
+| 图像生成 | Pollinations.AI / SiliconFlow |
 | 文档生成 | python-pptx, Jinja2, WeasyPrint |
+| 管理后台后端 | Java 17, Spring Boot 3.2.5, Spring Security |
+| 管理后台前端 | Vue 3, Element Plus, Vite |
