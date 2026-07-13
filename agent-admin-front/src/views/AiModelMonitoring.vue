@@ -48,6 +48,13 @@
       <v-chart class="chart" :option="tokenChartOption" autoresize style="height: 350px" />
     </el-card>
 
+      <el-col :span="24" style="margin-top: 20px;">
+        <el-card shadow="never" class="chart-card">
+          <div class="chart-header"><span class="chart-title">错误率趋势</span></div>
+          <v-chart class="chart" :option="errorRateChartOption" autoresize style="height: 300px" />
+        </el-card>
+      </el-col>
+
     <!-- 错误分析表格 -->
     <el-card shadow="never" class="chart-card">
       <div class="chart-header"><span class="chart-title">Provider 调用明细</span></div>
@@ -163,6 +170,35 @@ const tokenChartOption = computed(() => {
       data: dates.map(d => {
         const item = tokenUsage.value.find(t => t.date === d && t.provider === prov)
         return item ? item.totalTokens : 0
+      }),
+    })),
+  }
+})
+
+const errorRateChartOption = computed(() => {
+  const dates = [...new Set(timeline.value.map(t => t.date))].sort()
+  const types = [...new Set(timeline.value.map(t => t.callType))]
+  return {
+    tooltip: { trigger: 'axis', formatter: (params) => {
+      let html = params[0].axisValue + '<br/>'
+      params.forEach(p => {
+        html += `${p.marker} ${p.seriesName}: ${p.value.toFixed(2)}%<br/>`
+      })
+      return html
+    }},
+    legend: { data: types.map(t => t + ' 错误率') },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: dates, axisLabel: { rotate: 30 } },
+    yAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%' } },
+    series: types.map(type => ({
+      name: type + ' 错误率',
+      type: 'line',
+      smooth: true,
+      data: dates.map(d => {
+        const items = timeline.value.filter(t => t.date === d && t.callType === type)
+        const total = items.reduce((sum, t) => sum + t.count, 0)
+        const errors = items.reduce((sum, t) => sum + t.errorCount, 0)
+        return total > 0 ? (errors / total * 100) : 0
       }),
     })),
   }
