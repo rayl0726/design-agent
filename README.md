@@ -15,8 +15,20 @@
 
 ### 1. 启动 Milvus
 
+项目使用 Milvus 作为向量数据库。由于 `docker-compose.yml` 包含本地路径和敏感配置，未纳入版本控制，请按以下方式启动：
+
 ```bash
-docker-compose up -d
+# 方式一：直接使用 Docker 运行 Milvus standalone（推荐开发环境）
+docker run -d \
+  --name meichen-milvus \
+  -p 19530:19530 \
+  -p 9091:9091 \
+  -v /path/to/your/milvus/data:/var/lib/milvus \
+  milvusdb/milvus:v2.4.1 milvus run standalone
+
+# 方式二：在项目根目录创建自己的 docker-compose.yml
+# 参考 Milvus 官方 standalone 示例：
+# https://milvus.io/docs/install_standalone-docker.md
 ```
 
 ### 2. 启动 Ollama 并拉取模型
@@ -97,3 +109,32 @@ npm run dev
 | 文档生成 | python-pptx, Jinja2, WeasyPrint |
 | 管理后台后端 | Java 17, Spring Boot 3.2.5, Spring Security |
 | 管理后台前端 | Vue 3, Element Plus, Vite |
+
+## 项目结构说明
+
+### 根目录 `pom.xml`（不可删除）
+
+根目录的 `pom.xml` 是 Maven 聚合/父 POM，定义了 `agent-api` 和 `agent-admin-backend` 两个子模块：
+
+```xml
+<modules>
+    <module>agent-api</module>
+    <module>agent-admin-backend</module>
+</modules>
+```
+
+删除它会导致多模块构建失效，无法从项目根目录统一编译 Java 模块。请保留此文件。
+
+### 不纳入版本控制的本地文件
+
+以下文件/目录为本地开发配置或个人工作区文件，已配置在 `.gitignore` 中，不会推送到远端：
+
+| 文件/目录 | 说明 |
+|---|---|
+| `.trae/` | Trae IDE 的 skills 和本地配置 |
+| `.superpowers/` | 本地开发计划、进度账本和审查产物 |
+| `env.example` / `.env` | 环境变量模板和本地环境配置 |
+| `docker-compose.yml` | 本地 Milvus 等依赖的 Docker 编排（含本地路径） |
+| `design-data/` | 本地 Milvus、MinIO、etcd 数据目录 |
+
+如果你需要这些文件中的配置，请从其他渠道获取或在本地自行创建。

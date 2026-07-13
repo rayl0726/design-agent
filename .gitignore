@@ -8,8 +8,10 @@ node_modules/
 .DS_Store
 *.log
 .vscode
-.trae/*
+.trae/
+.superpowers/
 design-data
+docker-compose.yml
 agent-core/.venv/
 agent-core/meichen_ai.egg-info/
 agent-core/data/intent_traces/
