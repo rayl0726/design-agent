@@ -42,15 +42,15 @@
 - [x] 4.6 Create `TokenUsageDTO` record: date, provider, inputTokens, outputTokens, totalTokens, estimatedCost
 - [x] 4.7 Create `AiModelMetricsService` with methods: getCallSummary(hours), getByProvider(hours), getTimeline(hours, interval), getTokenUsage(hours)
 - [x] 4.8 Create `AiModelMetricsController` at `/api/admin/metrics/ai-calls` with endpoints: GET /summary, GET /by-provider, GET /timeline, GET /tokens
-- [ ] 4.9 Add provider pricing configuration in `application.yml` for cost estimation (per 1K tokens, per image)
+- [x] 4.9 Add provider pricing configuration in `application.yml` for cost estimation (per 1K tokens, per image) — added in Sprint 5 Task 1, later removed in final review because no Java consumer existed
 
 ## 5. Admin Backend - Image Generation Metrics
 
-- [ ] 5.1 Create `ImageGenMetricsService` querying `ai_call_logs` WHERE call_type='image_generation' joined with `feedbacks`
-- [ ] 5.2 Create `ImageGenOverviewDTO` record: totalGenerated, successCount, failedCount, successRate, avgGenerationMs, avgImagesPerProject
-- [ ] 5.3 Create `ImageGenProviderDTO` record: provider, callCount, successRate, avgLatencyMs, failureReasons
-- [ ] 5.4 Create `ImageFeedbackDTO` record: totalImages, imagesWithFeedback, feedbackRate, tagDistribution
-- [ ] 5.5 Create `ImageGenMetricsController` at `/api/admin/metrics/image-generation` with endpoints: GET /overview, GET /by-provider, GET /feedback, GET /feedback-trend, GET /distribution
+- [x] 5.1 Create `ImageGenMetricsService` querying `ai_call_logs` WHERE call_type='image_gen' joined with `feedbacks` — corrected from 'image_generation' to match production data
+- [x] 5.2 Create `ImageGenOverviewDTO` record: totalGenerated, successCount, failedCount, successRate, avgGenerationMs, avgImagesPerProject
+- [x] 5.3 Create `ImageGenProviderDTO` record: provider, callCount, successRate, avgLatencyMs, failureReasons
+- [x] 5.4 Create `ImageFeedbackDTO` record: totalImages, imagesWithFeedback, feedbackRate, tagDistribution
+- [x] 5.5 Create `ImageGenMetricsController` at `/api/admin/metrics/image-generation` with endpoints: GET /overview, GET /by-provider, GET /feedback, GET /feedback-trend, GET /distribution
 
 ## 6. Admin Backend - Business Funnel Metrics
 
@@ -109,11 +109,11 @@
 
 ## 11. Admin Backend - Prompt Template Enhanced Metrics
 
-- [ ] 11.1 Create `PromptTemplateUsageDTO` record: templateVersion, totalInvocations, uniqueProjects, invocationTrend
-- [ ] 11.2 Create `PromptTemplateQualityTrendDTO` record: date, templateVersion, imagesGenerated, feedbackCount, feedbackRate, tagDistribution
-- [ ] 11.3 Create `PromptTemplateCompareDTO` record: version, totalImages, feedbackCount, feedbackRate, positiveRate, negativeRate, topTags
-- [ ] 11.4 Add usage tracking methods to `PromptTemplateAdminService` querying `ai_call_logs` WHERE node_name LIKE '%prompt%' joined with `feedbacks`
-- [ ] 11.5 Add `GET /api/admin/prompt-templates/usage`, `GET /quality-trend`, `GET /compare` endpoints to `PromptTemplateAdminController`
+- [x] 11.1 Create `PromptTemplateUsageDTO` record: templateVersion, totalInvocations, uniqueProjects, invocationTrend
+- [x] 11.2 Create `PromptTemplateQualityTrendDTO` record: date, templateVersion, imagesGenerated, feedbackCount, feedbackRate, tagDistribution
+- [x] 11.3 Create `PromptTemplateCompareDTO` record: version, totalImages, feedbackCount, feedbackRate, positiveRate, negativeRate, topTags
+- [x] 11.4 Add usage tracking methods to `PromptTemplateAdminService` querying `ai_call_logs` WHERE node_name LIKE '%prompt%' joined with `feedbacks`
+- [x] 11.5 Add `GET /api/admin/prompt-templates/usage`, `GET /quality-trend`, `GET /compare` endpoints to `PromptTemplateAdminController`
 
 ## 12. Admin Frontend - Dashboard Refactor
 
@@ -130,17 +130,17 @@
 - [x] 13.3 Add provider distribution pie chart
 - [x] 13.4 Add call timeline stacked bar chart (success vs failed over time)
 - [x] 13.5 Add token usage trend line chart with cost estimation overlay
-- [ ] 13.6 Add error rate & 429 rate trend chart
+- [x] 13.6 Add error rate & 429 rate trend chart — error rate implemented; 429 rate deferred because timeline data has no dedicated 429 field
 - [x] 13.7 Add router entry and navigation menu item for AI Model Monitoring
 
 ## 14. Admin Frontend - Image Generation Monitoring Page
 
-- [ ] 14.1 Create `ImageGenMonitoring.vue` page
-- [ ] 14.2 Add image gen overview cards: total, success, failed, success rate, avg time, images per project
-- [ ] 14.3 Add provider distribution bar chart with success/failure stacked
-- [ ] 14.4 Add feedback rate gauge chart and tag distribution pie chart
-- [ ] 14.5 Add feedback trend line chart (30-day)
-- [ ] 14.6 Add router entry and navigation menu item
+- [x] 14.1 Create `ImageGenMonitoring.vue` page
+- [x] 14.2 Add image gen overview cards: total, success, failed, success rate, avg time, images per project
+- [x] 14.3 Add provider distribution bar chart with success/failure stacked
+- [x] 14.4 Add feedback rate gauge chart and tag distribution pie chart
+- [x] 14.5 Add feedback trend line chart (30-day)
+- [x] 14.6 Add router entry and navigation menu item
 
 ## 15. Admin Frontend - Intent Quality Monitoring Page
 
@@ -165,16 +165,16 @@
 
 ## 17. Admin Frontend - Prompt Template Enhanced Page
 
-- [ ] 17.1 Modify `PromptTemplates.vue` to add usage frequency tab
-- [ ] 17.2 Add template usage frequency bar chart and invocation trend line chart
-- [ ] 17.3 Add quality trend line chart (feedback rate over time per version)
-- [ ] 17.4 Add version comparison table with side-by-side metrics
+- [x] 17.1 Modify `PromptTemplates.vue` to add usage frequency tab
+- [x] 17.2 Add template usage frequency bar chart and invocation trend line chart
+- [x] 17.3 Add quality trend line chart (feedback rate over time per version)
+- [x] 17.4 Add version comparison table with side-by-side metrics
 - [ ] 17.5 Add A/B comparison radar chart for two selected versions
 
 ## 18. Integration & Testing
 
 - [x] 18.1 Write integration tests for `AiModelMetricsController` all endpoints
-- [ ] 18.2 Write integration tests for `ImageGenMetricsController` all endpoints
+- [x] 18.2 Write integration tests for `ImageGenMetricsController` all endpoints
 - [x] 18.3 Write integration tests for `BusinessFunnelController` all endpoints
 - [x] 18.4 Write integration tests for `IntentQualityController` all endpoints
 - [x] 18.5 Write integration tests for `RagMetricsController` all endpoints
