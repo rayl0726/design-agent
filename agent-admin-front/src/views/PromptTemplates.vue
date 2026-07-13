@@ -1,53 +1,100 @@
 <template>
   <div class="prompt-templates">
-    <el-card shadow="never">
-      <template #header>
-        <div class="card-header">
-          <span class="card-title">Prompt 模板管理</span>
-          <el-button :loading="loading" @click="loadTemplates">
-            <el-icon><Refresh /></el-icon>
-            <span>刷新</span>
-          </el-button>
-        </div>
-      </template>
+    <el-tabs v-model="activeTab">
+      <el-tab-pane label="模板管理" name="manage">
+        <el-card shadow="never">
+          <template #header>
+            <div class="card-header">
+              <span class="card-title">Prompt 模板管理</span>
+              <el-button :loading="loading" @click="loadTemplates">
+                <el-icon><Refresh /></el-icon>
+                <span>刷新</span>
+              </el-button>
+            </div>
+          </template>
 
-      <el-table
-        :data="templates"
-        v-loading="loading"
-        border
-        stripe
-        style="width: 100%"
-      >
-        <el-table-column label="模板名称" min-width="220">
-          <template #default="{ row }">
-            <span class="template-name">{{ row.name }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          label="适用空间类型"
-          prop="spaceType"
-          min-width="220"
-          show-overflow-tooltip
-        />
-        <el-table-column label="版本" width="110" align="center">
-          <template #default="{ row }">
-            <el-tag type="info" effect="plain">{{ row.version }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="220" align="center" fixed="right">
-          <template #default="{ row }">
-            <el-button size="small" @click="openPerformance(row)">
-              <el-icon><DataLine /></el-icon>
-              <span>查看效果</span>
-            </el-button>
-            <el-button size="small" type="primary" @click="openPreview(row)">
-              <el-icon><View /></el-icon>
-              <span>预览</span>
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
+          <el-table
+            :data="templates"
+            v-loading="loading"
+            border
+            stripe
+            style="width: 100%"
+          >
+            <el-table-column label="模板名称" min-width="220">
+              <template #default="{ row }">
+                <span class="template-name">{{ row.name }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              label="适用空间类型"
+              prop="spaceType"
+              min-width="220"
+              show-overflow-tooltip
+            />
+            <el-table-column label="版本" width="110" align="center">
+              <template #default="{ row }">
+                <el-tag type="info" effect="plain">{{ row.version }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="220" align="center" fixed="right">
+              <template #default="{ row }">
+                <el-button size="small" @click="openPerformance(row)">
+                  <el-icon><DataLine /></el-icon>
+                  <span>查看效果</span>
+                </el-button>
+                <el-button size="small" type="primary" @click="openPreview(row)">
+                  <el-icon><View /></el-icon>
+                  <span>预览</span>
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </el-tab-pane>
+
+      <el-tab-pane label="使用分析" name="analytics">
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-card shadow="never" class="chart-card">
+              <div class="chart-header"><span class="chart-title">模板调用频率</span></div>
+              <v-chart class="chart" :option="usageChartOption" autoresize style="height: 300px" />
+            </el-card>
+          </el-col>
+          <el-col :span="12">
+            <el-card shadow="never" class="chart-card">
+              <div class="chart-header"><span class="chart-title">调用趋势</span></div>
+              <v-chart class="chart" :option="usageTrendOption" autoresize style="height: 300px" />
+            </el-card>
+          </el-col>
+        </el-row>
+
+        <el-card shadow="never" class="chart-card" style="margin-top: 20px;">
+          <div class="chart-header"><span class="chart-title">质量趋势</span></div>
+          <v-chart class="chart" :option="qualityTrendOption" autoresize style="height: 320px" />
+        </el-card>
+
+        <el-card shadow="never" style="margin-top: 20px;">
+          <template #header>版本对比</template>
+          <el-table :data="compareData" stripe>
+            <el-table-column prop="version" label="版本" width="120" />
+            <el-table-column prop="feedbackCount" label="反馈数" width="100" />
+            <el-table-column prop="positiveRate" label="正面率" width="100">
+              <template #default="{ row }">{{ row.positiveRate.toFixed(1) }}%</template>
+            </el-table-column>
+            <el-table-column prop="negativeRate" label="负面率" width="100">
+              <template #default="{ row }">{{ row.negativeRate.toFixed(1) }}%</template>
+            </el-table-column>
+            <el-table-column label="热门标签">
+              <template #default="{ row }">
+                <el-tag v-for="t in row.topTags" :key="t.tag" size="small" style="margin: 2px;">
+                  {{ t.tag }} ({{ t.count }})
+                </el-tag>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </el-tab-pane>
+    </el-tabs>
 
     <!-- 模板效果统计对话框 -->
     <el-dialog
@@ -189,9 +236,94 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import client from '../api/client'
+import { use } from 'echarts/core'
+import VChart from 'vue-echarts'
+import { BarChart, LineChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
+
+use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent])
+
+// ---------- 使用分析 ----------
+const activeTab = ref('manage')
+const usageData = ref([])
+const qualityTrend = ref([])
+const compareData = ref([])
+
+const usageChartOption = computed(() => ({
+  tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+  grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+  xAxis: { type: 'category', data: usageData.value.map(u => u.templateVersion), axisLabel: { rotate: 30 } },
+  yAxis: { type: 'value' },
+  series: [{ type: 'bar', data: usageData.value.map(u => u.totalInvocations), itemStyle: { color: '#409eff' } }],
+}))
+
+const usageTrendOption = computed(() => {
+  const dates = [...new Set(usageData.value.flatMap(u => u.invocationTrend.map(t => t.date)))].sort()
+  return {
+    tooltip: { trigger: 'axis' },
+    legend: { data: usageData.value.map(u => u.templateVersion) },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: dates, axisLabel: { rotate: 30 } },
+    yAxis: { type: 'value' },
+    series: usageData.value.map(u => ({
+      name: u.templateVersion,
+      type: 'line',
+      smooth: true,
+      data: dates.map(d => {
+        const item = u.invocationTrend.find(t => t.date === d)
+        return item ? item.count : 0
+      }),
+    })),
+  }
+})
+
+const qualityTrendOption = computed(() => {
+  const dates = [...new Set(qualityTrend.value.map(q => q.date))].sort()
+  const versions = [...new Set(qualityTrend.value.map(q => q.templateVersion))]
+  return {
+    tooltip: { trigger: 'axis' },
+    legend: { data: versions },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: dates, axisLabel: { rotate: 30 } },
+    yAxis: { type: 'value', name: '反馈数' },
+    series: versions.map(v => ({
+      name: v,
+      type: 'line',
+      smooth: true,
+      data: dates.map(d => {
+        const item = qualityTrend.value.find(q => q.date === d && q.templateVersion === v)
+        return item ? item.feedbackCount : 0
+      }),
+    })),
+  }
+})
+
+async function loadAnalytics() {
+  try {
+    const [usage, trend, compare] = await Promise.all([
+      client.get('/prompt-templates/usage', { params: { hours: 168 } }),
+      client.get('/prompt-templates/quality-trend', { params: { hours: 168 } }),
+      client.get('/prompt-templates/compare'),
+    ])
+    usageData.value = usage
+    qualityTrend.value = trend
+    compareData.value = compare
+  } catch {
+    usageData.value = []
+    qualityTrend.value = []
+    compareData.value = []
+  }
+}
+
+watch(activeTab, (tab) => {
+  if (tab === 'analytics' && usageData.value.length === 0) {
+    loadAnalytics()
+  }
+})
 
 // ---------- 模板列表 ----------
 const loading = ref(false)
@@ -411,6 +543,21 @@ onMounted(() => {
 
 .result-label {
   font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+}
+
+/* 使用分析图表 */
+.chart-card {
+  background: #fff;
+}
+
+.chart-header {
+  margin-bottom: 12px;
+}
+
+.chart-title {
+  font-size: 15px;
   font-weight: 600;
   color: #303133;
 }
