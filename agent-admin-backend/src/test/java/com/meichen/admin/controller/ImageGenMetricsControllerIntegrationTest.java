@@ -99,7 +99,7 @@ class ImageGenMetricsControllerIntegrationTest {
     private void insertImageGenLog(String provider, String status, int durationMs, String projectId) {
         jdbcTemplate.update(
             "INSERT INTO ai_call_logs (project_id, call_type, provider, model, node_name, status, duration_ms, input_tokens, output_tokens, total_tokens, created_at) " +
-            "VALUES (?, 'image_generation', ?, 'test-model', 'test-node', ?, ?, 0, 0, 0, NOW())",
+            "VALUES (?, 'image_gen', ?, 'test-model', 'test-node', ?, ?, 0, 0, 0, NOW())",
             projectId, provider, status, durationMs
         );
     }

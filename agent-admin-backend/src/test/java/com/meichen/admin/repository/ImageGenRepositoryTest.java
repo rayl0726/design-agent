@@ -34,9 +34,9 @@ class ImageGenRepositoryTest {
 
     @Test
     void findImageGenOverview_returnsAggregatedStats() {
-        insertAiCallLog("image_generation", "siliconflow", "success", 5000, "proj-1");
-        insertAiCallLog("image_generation", "siliconflow", "success", 3000, "proj-1");
-        insertAiCallLog("image_generation", "siliconflow", "failed", 1000, "proj-2");
+        insertAiCallLog("image_gen", "siliconflow", "success", 5000, "proj-1");
+        insertAiCallLog("image_gen", "siliconflow", "success", 3000, "proj-1");
+        insertAiCallLog("image_gen", "siliconflow", "failed", 1000, "proj-2");
         insertAiCallLog("llm", "zhipu", "success", 200, "proj-1"); // not image_gen
 
         LocalDateTime since = LocalDateTime.now().minusHours(24);
@@ -53,8 +53,8 @@ class ImageGenRepositoryTest {
 
     @Test
     void groupImageGenByProvider_groupsCorrectly() {
-        insertAiCallLog("image_generation", "siliconflow", "success", 5000, "proj-1");
-        insertAiCallLog("image_generation", "zhipu", "failed", 2000, "proj-2");
+        insertAiCallLog("image_gen", "siliconflow", "success", 5000, "proj-1");
+        insertAiCallLog("image_gen", "zhipu", "failed", 2000, "proj-2");
 
         LocalDateTime since = LocalDateTime.now().minusHours(24);
         List<Object[]> results = aiCallLogRepo.groupImageGenByProvider(since);
@@ -64,9 +64,9 @@ class ImageGenRepositoryTest {
 
     @Test
     void findImageGenFailureReasons_returnsErrorMessages() {
-        insertAiCallLogWithError("image_generation", "siliconflow", "failed", 1000, "proj-1", "timeout");
-        insertAiCallLogWithError("image_generation", "siliconflow", "failed", 500, "proj-2", "timeout");
-        insertAiCallLogWithError("image_generation", "siliconflow", "failed", 200, "proj-3", "content_filter");
+        insertAiCallLogWithError("image_gen", "siliconflow", "failed", 1000, "proj-1", "timeout");
+        insertAiCallLogWithError("image_gen", "siliconflow", "failed", 500, "proj-2", "timeout");
+        insertAiCallLogWithError("image_gen", "siliconflow", "failed", 200, "proj-3", "content_filter");
 
         LocalDateTime since = LocalDateTime.now().minusHours(24);
         List<Object[]> results = aiCallLogRepo.findImageGenFailureReasons(since);

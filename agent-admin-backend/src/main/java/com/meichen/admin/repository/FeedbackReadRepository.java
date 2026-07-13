@@ -72,7 +72,7 @@ public interface FeedbackReadRepository extends JpaRepository<FeedbackRead, Stri
     @Query("SELECT CAST(f.createdAt AS date), f.promptTemplateVersion, COUNT(f), " +
            "SUM(CASE WHEN f.tag IN ('good', 'like', 'positive') THEN 1 ELSE 0 END), " +
            "SUM(CASE WHEN f.tag IN ('bad', 'dislike', 'negative', 'composition', 'quality') THEN 1 ELSE 0 END) " +
-           "FROM FeedbackRead f WHERE f.imageUrl IS NOT NULL AND f.createdAt >= :since " +
+           "FROM FeedbackRead f WHERE f.imageUrl IS NOT NULL AND f.promptTemplateVersion IS NOT NULL AND f.createdAt >= :since " +
            "GROUP BY CAST(f.createdAt AS date), f.promptTemplateVersion " +
            "ORDER BY CAST(f.createdAt AS date)")
     List<Object[]> countImageFeedbackByDateAndVersion(@Param("since") LocalDateTime since);
