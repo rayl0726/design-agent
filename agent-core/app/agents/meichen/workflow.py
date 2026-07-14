@@ -16,8 +16,8 @@ async def run_meichen_workflow(inputs: dict[str, Any]) -> dict[str, Any]:
     parsed = await parse_input(inputs)
     requirement = await analyze_requirement(parsed)
     concepts = await design_concepts(requirement)
-    visuals = await generate_visuals(concepts)
-    technical = await design_technical(concepts, visuals)
+    visuals = await generate_visuals(concepts, requirement)
+    technical = await design_technical(concepts, visuals, requirement)
 
     return {
         "l1_output": requirement,

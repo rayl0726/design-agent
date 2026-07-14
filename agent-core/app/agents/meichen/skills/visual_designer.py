@@ -232,7 +232,9 @@ class VisualDesignerAgent:
             return {"consistent": True, "parse_error": True}
 
 
-async def generate_visuals(concepts: dict[str, Any]) -> dict[str, Any]:
+async def generate_visuals(
+    concepts: dict[str, Any], requirement: dict[str, Any]
+) -> dict[str, Any]:
     """入口包装：根据 L1 概念方案生成 L2 视觉方案。"""
     agent = VisualDesignerAgent()
-    return await agent.design(concepts, {})
+    return await agent.design(concepts, requirement)
