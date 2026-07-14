@@ -1,6 +1,6 @@
 import pytest
 
-from app.agents.input_parser import TextParser
+from app.agents.meichen.skills.input_parser import TextParser
 from app.services.intent_recognition import IntentRecognitionService
 
 
@@ -54,7 +54,7 @@ async def test_parse_text_passes_project_id_to_recognize(monkeypatch):
             from app.services.intent_recognition_result import ValidatedIntent
             return ValidatedIntent(raw_text=text)
 
-    monkeypatch.setattr("app.agents.input_parser.get_intent_service", lambda: StubService())
+    monkeypatch.setattr("app.agents.meichen.skills.input_parser.get_intent_service", lambda: StubService())
     parser = TextParser()
     await parser.parse("圣诞节", project_id="proj-abc-123")
     assert captured_project_id["value"] == "proj-abc-123"
@@ -85,7 +85,7 @@ async def test_parse_text_returns_enriched_recognition_meta(monkeypatch):
                 budget=RecognizedField(name="budget", value=300000, source=FieldSource.VALIDATED, confidence=0.95, raw_text="30万"),
             )
 
-    monkeypatch.setattr("app.agents.input_parser.get_intent_service", lambda: StubService())
+    monkeypatch.setattr("app.agents.meichen.skills.input_parser.get_intent_service", lambda: StubService())
     parser = TextParser()
     result = await parser.parse("圣诞节，购物中心中庭，30万")
     meta = result["_recognition_meta"]

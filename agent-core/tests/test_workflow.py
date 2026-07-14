@@ -1,7 +1,7 @@
 import pytest
 
-from app.agents.input_parser import TextParser, InputMerger
-from app.agents.requirement_analyst import RequirementAnalyst
+from app.agents.meichen.skills.input_parser import TextParser, InputMerger
+from app.agents.meichen.skills.requirement_analyst import RequirementAnalyst
 from app.models.database import init_db
 from app.services.intent_recognition import IntentRecognitionService
 

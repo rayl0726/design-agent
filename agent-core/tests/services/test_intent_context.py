@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from app.agents.input_parser import TextParser
+from app.agents.meichen.skills.input_parser import TextParser
 from app.services.intent_llm_extractor import IntentLLMExtractor
 from app.services.intent_recognition_result import ValidatedIntent, RecognizedField, FieldSource
 from app.services.taxonomy_loader import load_taxonomy

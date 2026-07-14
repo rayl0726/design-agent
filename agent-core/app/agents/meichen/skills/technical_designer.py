@@ -6,7 +6,7 @@ from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 
-from app.agents.knowledge_retrieval import retrieve_cases, retrieve_materials
+from app.agents.meichen.skills.knowledge_retrieval import retrieve_cases, retrieve_materials
 from app.services.image_generation import generate_images_with_fallback
 from app.core.config import settings
 from app.models.database import get_session

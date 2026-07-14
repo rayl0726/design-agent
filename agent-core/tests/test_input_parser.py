@@ -1,6 +1,6 @@
 import pytest
 
-from app.agents.input_parser import TextParser
+from app.agents.meichen.skills.input_parser import TextParser
 from app.services.intent_recognition_result import (
     ClarificationRequest,
     RecognizedField,
@@ -32,7 +32,7 @@ class FakeIntentRecognitionService:
 @pytest.fixture(autouse=True)
 def fake_intent_service(monkeypatch):
     monkeypatch.setattr(
-        "app.agents.input_parser.get_intent_service", lambda: FakeIntentRecognitionService()
+        "app.agents.meichen.skills.input_parser.get_intent_service", lambda: FakeIntentRecognitionService()
     )
 
 

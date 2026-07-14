@@ -3,12 +3,12 @@ from __future__ import annotations
 from fastapi import APIRouter, Body
 from pydantic import BaseModel
 
-from app.agents.input_parser import PhotoParser, VideoParser, CADParser, PDFParser, PPTParser, ReferenceParser, TextParser, InputMerger
-from app.agents.requirement_analyst import RequirementAnalyst
-from app.agents.knowledge_retrieval import KnowledgeRetrievalAgent
-from app.agents.concept_designer import ConceptDesignerAgent
-from app.agents.visual_designer import VisualDesignerAgent
-from app.agents.technical_designer import TechnicalDesignerAgent
+from app.agents.meichen.skills.input_parser import PhotoParser, VideoParser, CADParser, PDFParser, PPTParser, ReferenceParser, TextParser, InputMerger
+from app.agents.meichen.skills.requirement_analyst import RequirementAnalyst
+from app.agents.meichen.skills.knowledge_retrieval import KnowledgeRetrievalAgent
+from app.agents.meichen.skills.concept_designer import ConceptDesignerAgent
+from app.agents.meichen.skills.visual_designer import VisualDesignerAgent
+from app.agents.meichen.skills.technical_designer import TechnicalDesignerAgent
 from app.services.doc_generator import doc_generator
 from app.services.negative_prompt_builder import NegativePromptBuilder
 from app.services.prompt_template_loader import PromptTemplateLoader

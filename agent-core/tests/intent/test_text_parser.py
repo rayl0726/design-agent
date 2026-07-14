@@ -1,6 +1,6 @@
 import pytest
 
-from app.agents.input_parser import TextParser
+from app.agents.meichen.skills.input_parser import TextParser
 from app.services.intent_recognition import IntentRecognitionService
 
 

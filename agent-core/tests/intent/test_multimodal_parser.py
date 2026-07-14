@@ -1,4 +1,4 @@
-from app.agents.input_parser import PhotoParser, ReferenceParser
+from app.agents.meichen.skills.input_parser import PhotoParser, ReferenceParser
 
 
 def test_photo_parser_normalizes_space_type() -> None:
