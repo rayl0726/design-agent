@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
 
@@ -276,4 +277,11 @@ async def search(
     context; it is reserved for future per-agent filtering and currently
     does not change the search behavior.
     """
-    return await knowledge_base.semantic_search(query=query, top_k=top_k)
+    try:
+        return await asyncio.wait_for(
+            knowledge_base.semantic_search(query=query, top_k=top_k),
+            timeout=30,
+        )
+    except asyncio.TimeoutError:
+        print(f"Knowledge base search timed out after 30s: query={query!r}")
+        return []
