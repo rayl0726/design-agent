@@ -13,6 +13,6 @@ class TaskPlanner:
                 goal=tmpl.id,
                 required_fields=tmpl.required_fields,
                 dependencies=tmpl.dependencies,
-                confidence_threshold=tmpl.confidence_threshold or 0.95,
+                confidence_threshold=tmpl.confidence_threshold if tmpl.confidence_threshold is not None else 0.95,
             ))
         return TaskPlan(tasks=tasks)
