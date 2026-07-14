@@ -272,6 +272,11 @@ class ImageGenerationService:
 image_generation = ImageGenerationService()
 
 
+async def generate_image(inputs: dict) -> dict:
+    """Tool-style entry point for image generation from an intent-like dict."""
+    return await image_generation.generate_from_intent(inputs)
+
+
 async def generate_images_with_fallback(prompts: list[str], aspect_ratio: str = "16:9", style: str = "realistic") -> list[str]:
     results = []
     for prompt in prompts:

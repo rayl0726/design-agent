@@ -263,3 +263,17 @@ class KnowledgeBase:
 
 
 knowledge_base = KnowledgeBase()
+
+
+async def search(
+    query: str,
+    top_k: int = 5,
+    agent_type: str | None = None,
+) -> list[dict[str, Any]]:
+    """Tool-style entry point for knowledge base semantic search.
+
+    The ``agent_type`` parameter is accepted so callers can pass runtime
+    context; it is reserved for future per-agent filtering and currently
+    does not change the search behavior.
+    """
+    return await knowledge_base.semantic_search(query=query, top_k=top_k)
