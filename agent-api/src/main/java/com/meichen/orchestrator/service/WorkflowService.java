@@ -78,12 +78,18 @@ public class WorkflowService {
         project.setRawInputsJson(toJson(inputs));
         project = publicIdGenerator.assignAndSave(project, Project::setPublicId, projectRepository::save);
 
-        String greeting = "你好！我是你的美陈设计助手。\n"
-            + "请告诉我：\n"
-            + "• 项目主题（如：夏日海洋、新春国潮）\n"
-            + "• 空间类型（购物中心 / 百货 / 快闪店 / 展厅等）\n"
-            + "• 预算区间\n"
-            + "• 涉及哪些点位？每个点位需要几个？";
+        String greeting;
+        if ("meichen".equals(project.getAgentType())) {
+            greeting = "你好！我是你的美陈设计助手。\n"
+                + "请告诉我：\n"
+                + "• 项目主题（如：夏日海洋、新春国潮）\n"
+                + "• 空间类型（购物中心 / 百货 / 快闪店 / 展厅等）\n"
+                + "• 预算区间\n"
+                + "• 涉及哪些点位？每个点位需要几个？";
+        } else {
+            greeting = "你好！我是你的通用 AI 助手。\n"
+                + "向我提出任何问题或任务，我会自主规划、调用工具并给出可靠答案。";
+        }
         sessionMessageService.addAssistantMessage(project.getId(), "text", greeting, userId);
 
         return project;

@@ -5,7 +5,7 @@
       <div class="sidebar-brand">
         <div class="brand-logo">
           <span class="logo-icon">M</span>
-          <span class="logo-text">美陈 Agent</span>
+          <span class="logo-text">Agent</span>
         </div>
       </div>
 
@@ -15,7 +15,7 @@
           size="large"
           class="new-chat-btn"
           :loading="creating"
-          @click="createNewSession"
+          @click="createNewSession('generic')"
         >
           <el-icon><Plus /></el-icon>
           新建对话
@@ -23,24 +23,65 @@
       </div>
 
       <div class="session-list">
-        <div class="list-header">
-          <span>会话历史</span>
-          <span class="list-count">{{ sessions.length }}</span>
-        </div>
-        <div
-          v-for="s in sortedSessions"
-          :key="s.id"
-          class="session-item"
-          :class="{ active: s.id === sessionId }"
-          @click="goSession(s.id)"
-        >
-          <el-icon class="session-icon"><ChatDotRound /></el-icon>
-          <div class="session-info">
-            <p class="session-name">{{ s.name || '未命名会话' }}</p>
-            <p class="session-time">{{ formatDate(s.createdAt) }}</p>
+        <!-- 通用 Agent 会话组 -->
+        <div class="session-group">
+          <div class="list-header">
+            <span>通用会话</span>
+            <span class="list-count">{{ genericSessions.length }}</span>
           </div>
+          <div
+            v-for="s in genericSessions"
+            :key="s.id"
+            class="session-item"
+            :class="{ active: s.id === sessionId }"
+            @click="goSession(s.id)"
+          >
+            <el-icon class="session-icon"><ChatDotRound /></el-icon>
+            <div class="session-info">
+              <p class="session-name">{{ s.name || '未命名会话' }}</p>
+              <p class="session-time">{{ formatDate(s.createdAt) }}</p>
+            </div>
+            <div class="session-actions" @click.stop>
+              <el-button text size="small" @click="startRename(s)">
+                <el-icon><Edit /></el-icon>
+              </el-button>
+              <el-button text size="small" @click="deleteSession(s.id)">
+                <el-icon><Delete /></el-icon>
+              </el-button>
+            </div>
+          </div>
+          <el-empty v-if="genericSessions.length === 0" description="暂无通用会话" :image-size="40" />
         </div>
-        <el-empty v-if="sessions.length === 0" description="暂无会话" :image-size="60" />
+
+        <!-- 美陈 Agent 会话组 -->
+        <div class="session-group">
+          <div class="list-header">
+            <span>美陈项目</span>
+            <span class="list-count">{{ meichenSessions.length }}</span>
+          </div>
+          <div
+            v-for="s in meichenSessions"
+            :key="s.id"
+            class="session-item"
+            :class="{ active: s.id === sessionId }"
+            @click="goSession(s.id)"
+          >
+            <el-icon class="session-icon"><MagicStick /></el-icon>
+            <div class="session-info">
+              <p class="session-name">{{ s.name || '未命名项目' }}</p>
+              <p class="session-time">{{ formatDate(s.createdAt) }}</p>
+            </div>
+            <div class="session-actions" @click.stop>
+              <el-button text size="small" @click="startRename(s)">
+                <el-icon><Edit /></el-icon>
+              </el-button>
+              <el-button text size="small" @click="deleteSession(s.id)">
+                <el-icon><Delete /></el-icon>
+              </el-button>
+            </div>
+          </div>
+          <el-empty v-if="meichenSessions.length === 0" description="暂无美陈项目" :image-size="40" />
+        </div>
       </div>
     </aside>
 
@@ -48,16 +89,13 @@
     <main class="chat-main">
       <header class="chat-header">
         <div class="header-title">
-          <h2>{{ session.name || '新对话' }}</h2>
+          <h2>{{ pageTitle }}</h2>
           <p v-if="sessionId" class="header-subtitle">{{ sessionId }}</p>
         </div>
         <div class="header-actions">
           <el-button text @click="openLogDrawer">
             <el-icon><Document /></el-icon>
             <span class="header-action-text">日志</span>
-          </el-button>
-          <el-button v-if="sessionId" text @click="deleteSession">
-            <el-icon><Delete /></el-icon>
           </el-button>
           <el-dropdown trigger="click" @command="handleUserCommand">
             <span class="user-info">
@@ -75,49 +113,16 @@
       </header>
 
       <div ref="messageList" class="message-list">
-        <!-- 空状态欢迎页 -->
-        <div v-if="!sessionId" class="welcome-center">
-          <div class="welcome-card">
-            <div class="welcome-icon">
-              <el-icon :size="48"><MagicStick /></el-icon>
-            </div>
-            <h1>{{ welcomeTitle }}</h1>
-            <p class="welcome-desc">{{ welcomeDesc }}</p>
-            <div v-if="currentAgentType === 'meichen'" class="welcome-examples">
-              <div class="example-chip" @click="quickStart('夏日海洋主题购物中心中庭吊饰，预算15万')">
-                夏日海洋主题购物中心中庭吊饰，预算15万
-              </div>
-              <div class="example-chip" @click="quickStart('新春国潮快闪店，包含门头、DP点、合影墙')">
-                新春国潮快闪店，包含门头、DP点、合影墙
-              </div>
-              <div class="example-chip" @click="quickStart('轻奢风格百货商场入口美陈，需要灯光装置')">
-                轻奢风格百货商场入口美陈，需要灯光装置
-              </div>
-            </div>
-            <div v-else class="welcome-examples">
-              <div class="example-chip" @click="quickStart('帮我制定一份暑期营销活动策划方案')">
-                帮我制定一份暑期营销活动策划方案
-              </div>
-              <div class="example-chip" @click="quickStart('分析一下最近三个月的销售数据趋势')">
-                分析一下最近三个月的销售数据趋势
-              </div>
-              <div class="example-chip" @click="quickStart('写一个适合商场中庭发布会的开场文案')">
-                写一个适合商场中庭发布会的开场文案
-              </div>
-            </div>
-            <el-button type="primary" size="large" class="welcome-start" @click="createNewSession">
-              开始新对话
-            </el-button>
-          </div>
+        <!-- 空状态：居中提示 -->
+        <div v-if="!sessionId" class="empty-chat">
+          <h1 class="empty-title">{{ welcomeTitle }}</h1>
+          <p class="empty-desc">{{ welcomeDesc }}</p>
         </div>
 
         <!-- 消息列表 -->
         <template v-if="sessionId">
           <template v-for="(msg, idx) in messages" :key="msg.id">
-            <div
-              class="message-wrapper"
-              :class="msg.role"
-            >
+            <div class="message-wrapper" :class="msg.role">
               <div class="message-avatar">
                 <div v-if="msg.role === 'user'" class="avatar user-avatar">我</div>
                 <div v-else class="avatar ai-avatar">AI</div>
@@ -136,7 +141,6 @@
               </div>
             </div>
 
-            <!-- 思考过程：紧跟最后一个用户消息，完成后折叠，后续 AI 回复在其后输出 -->
             <div
               v-if="idx === lastUserMessageIndex && (thinkingLogs.length > 0 || session.status === 'PARSING')"
               class="thinking-wrapper"
@@ -148,40 +152,51 @@
         </template>
       </div>
 
-      <!-- 底部输入区 -->
-      <footer v-if="sessionId" class="chat-input-area">
-        <div class="input-container">
-          <el-input
-            v-model="inputText"
-            type="textarea"
-            :rows="2"
-            resize="none"
-            :placeholder="inputPlaceholder"
-            class="chat-input"
-            @keydown.enter.prevent="sendMessage"
-          />
-          <div class="input-actions">
-            <el-button text class="attach-btn">
-              <el-icon><Paperclip /></el-icon>
-            </el-button>
-            <el-button
-              type="primary"
-              class="send-btn"
-              :loading="sending"
-              :disabled="!inputText.trim()"
-              @click="sendMessage"
-            >
-              <el-icon><Promotion /></el-icon>
-            </el-button>
+      <!-- 底部输入区：始终显示 -->
+      <footer class="chat-input-area">
+        <div class="input-wrapper">
+          <div class="input-container">
+            <el-input
+              v-model="inputText"
+              type="textarea"
+              :rows="2"
+              resize="none"
+              :placeholder="inputPlaceholder"
+              class="chat-input"
+              @keydown.enter.prevent="sendMessage"
+            />
+            <div class="input-actions">
+              <el-button text class="attach-btn">
+                <el-icon><Paperclip /></el-icon>
+              </el-button>
+              <el-button
+                type="primary"
+                class="send-btn"
+                :loading="sending"
+                :disabled="!inputText.trim()"
+                @click="sendMessage"
+              >
+                <el-icon><Promotion /></el-icon>
+              </el-button>
+            </div>
+          </div>
+          <div class="input-footer">
+            <AgentSelector :model-value="currentAgentType" @select="onAgentSelect" />
+            <p class="input-hint">按 Enter 发送，Shift + Enter 换行</p>
           </div>
         </div>
-        <div class="agent-selector-bar">
-          <AgentSelector :model-value="currentAgentType" @select="onAgentSelect" />
-        </div>
-        <p class="input-hint">按 Enter 发送，Shift + Enter 换行</p>
       </footer>
     </main>
   </div>
+
+  <!-- 重命名对话框 -->
+  <el-dialog v-model="renameDialogOpen" title="重命名会话" width="400px">
+    <el-input v-model="renameValue" placeholder="输入新名称" @keydown.enter.prevent="confirmRename" />
+    <template #footer>
+      <el-button @click="renameDialogOpen = false">取消</el-button>
+      <el-button type="primary" :disabled="!renameValue.trim()" @click="confirmRename">确定</el-button>
+    </template>
+  </el-dialog>
 
   <el-drawer
     v-model="logDrawerOpen"
@@ -243,7 +258,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, ChatDotRound, Delete, MagicStick, Paperclip, Promotion, Document, User, ArrowDown } from '@element-plus/icons-vue'
+import { Plus, ChatDotRound, Delete, MagicStick, Paperclip, Promotion, Document, User, ArrowDown, Edit } from '@element-plus/icons-vue'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
 import { projectApi, messageApi, thinkingApi, stageLogApi } from '../api/client.js'
 import { useAuthStore } from '@/stores/auth'
@@ -271,8 +286,30 @@ const logDrawerOpen = ref(false)
 const stageLogs = ref([])
 const logLoading = ref(false)
 const currentAgentType = ref('generic')
+const renameDialogOpen = ref(false)
+const renameValue = ref('')
+const renamingSession = ref(null)
 let eventSource = null
 let sseReconnectTimer = null
+
+const genericSessions = computed(() => {
+  return sessions.value
+    .filter((s) => s.agentType === 'generic' || !s.agentType)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+})
+
+const meichenSessions = computed(() => {
+  return sessions.value
+    .filter((s) => s.agentType === 'meichen')
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+})
+
+const pageTitle = computed(() => {
+  if (sessionId.value) {
+    return session.value.name || (session.value.agentType === 'meichen' ? '美陈项目' : '新对话')
+  }
+  return currentAgentType.value === 'meichen' ? '美陈设计 Agent' : '通用 Agent'
+})
 
 const welcomeTitle = computed(() => {
   return currentAgentType.value === 'meichen' ? '美陈设计 Agent' : '通用 Agent'
@@ -288,10 +325,6 @@ const inputPlaceholder = computed(() => {
   return currentAgentType.value === 'meichen'
     ? '描述你的美陈设计需求，按 Enter 发送...'
     : '输入你的问题或任务，按 Enter 发送...'
-})
-
-const sortedSessions = computed(() => {
-  return [...sessions.value].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
 })
 
 const stageLogTree = computed(() => {
@@ -429,8 +462,9 @@ const loadSessions = async () => {
 const createNewSession = async (agentType = 'generic') => {
   creating.value = true
   try {
+    const name = agentType === 'meichen' ? '新美陈项目' : '新对话'
     const res = await projectApi.create({
-      name: '新对话',
+      name,
       description: '',
       agent_type: agentType,
       inputs: [],
@@ -448,13 +482,6 @@ const createNewSession = async (agentType = 'generic') => {
 const onAgentSelect = async (agentType) => {
   if (agentType === currentAgentType.value) return
   await createNewSession(agentType)
-}
-
-const quickStart = async (text) => {
-  await createNewSession(currentAgentType.value)
-  inputText.value = text
-  // createNewSession 会改变 route，等跳转完成后再发送
-  setTimeout(() => sendMessage(), 300)
 }
 
 const connectSse = (projectId) => {
@@ -538,12 +565,10 @@ const connectSse = (projectId) => {
       }
     },
     onclose() {
-      // 连接被服务端正常关闭时不自动重连；异常断开会通过 onerror 处理
     },
     onerror(err) {
       console.error('SSE error', err)
       scheduleReconnect(projectId)
-      // 必须抛出错误才能阻止 fetchEventSource 内部重连，由我们自己控制重连
       throw err
     },
   }).catch((err) => {
@@ -574,14 +599,33 @@ const disconnectSse = () => {
 
 const sendMessage = async () => {
   const text = inputText.value.trim()
-  if (!text || !sessionId.value) return
-  sending.value = true
+  if (!text) return
 
-  // 乐观更新：用户消息立即上屏
+  let projectId = sessionId.value
+  if (!projectId) {
+    // 无会话时先创建通用 Agent 会话
+    const name = text.length > 20 ? text.slice(0, 20) + '...' : text
+    try {
+      const res = await projectApi.create({
+        name,
+        description: '',
+        agent_type: currentAgentType.value,
+        inputs: [],
+      })
+      projectId = res.data.id
+      await loadSessions()
+      router.push(`/project/${projectId}`)
+    } catch (e) {
+      ElMessage.error('创建会话失败')
+      return
+    }
+  }
+
+  sending.value = true
   const tempId = `temp-${Date.now()}`
   messages.value.push({
     id: tempId,
-    projectId: sessionId.value,
+    projectId: projectId,
     role: 'user',
     messageType: 'text',
     content: text,
@@ -591,26 +635,50 @@ const sendMessage = async () => {
   scrollToBottom()
 
   try {
-    await messageApi.send(sessionId.value, text)
+    await messageApi.send(projectId, text)
   } catch (e) {
     ElMessage.error('发送失败')
-    // 发送失败时移除临时消息
     messages.value = messages.value.filter((m) => m.id !== tempId)
   } finally {
     sending.value = false
   }
 }
 
-const deleteSession = async () => {
+const deleteSession = async (id) => {
   try {
     await ElMessageBox.confirm('确定删除这个会话吗？', '删除会话', { type: 'warning' })
-    await projectApi.delete?.(sessionId.value) || ElMessage.warning('后端暂未提供删除接口')
+    await projectApi.delete(id)
     await loadSessions()
-    router.push('/')
+    if (sessionId.value === id) {
+      router.push('/')
+    }
   } catch (e) {
     if (e !== 'cancel') {
       console.error(e)
     }
+  }
+}
+
+const startRename = (s) => {
+  renamingSession.value = s
+  renameValue.value = s.name || ''
+  renameDialogOpen.value = true
+}
+
+const confirmRename = async () => {
+  if (!renamingSession.value || !renameValue.value.trim()) return
+  try {
+    await projectApi.update(renamingSession.value.id, { name: renameValue.value.trim() })
+    renamingSession.value.name = renameValue.value.trim()
+    if (sessionId.value === renamingSession.value.id) {
+      session.value.name = renameValue.value.trim()
+    }
+    ElMessage.success('重命名成功')
+  } catch (e) {
+    ElMessage.error('重命名失败')
+  } finally {
+    renameDialogOpen.value = false
+    renamingSession.value = null
   }
 }
 
@@ -659,22 +727,23 @@ watch(() => route.params.id, (newId) => {
   display: flex;
   height: 100vh;
   width: 100vw;
-  background: #f8fafc;
+  background: #ffffff;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
-/* 左侧边栏 */
+/* 左侧边栏：GPT 风格深色 */
 .sidebar {
-  width: 280px;
-  background: #1e293b;
-  color: #e2e8f0;
+  width: 260px;
+  background: #171717;
+  color: #ececf1;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  border-right: 1px solid #2d2d2d;
 }
 
 .sidebar-brand {
-  padding: 20px 16px 16px;
+  padding: 14px 14px 8px;
 }
 
 .brand-logo {
@@ -684,90 +753,102 @@ watch(() => route.params.id, (newId) => {
 }
 
 .logo-icon {
-  width: 36px;
-  height: 36px;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  border-radius: 10px;
+  width: 30px;
+  height: 30px;
+  background: #10a37f;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 18px;
+  font-size: 16px;
   color: #fff;
 }
 
 .logo-text {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: #fff;
 }
 
 .sidebar-actions {
-  padding: 0 16px 16px;
+  padding: 0 14px 12px;
 }
 
 .new-chat-btn {
   width: 100%;
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
-  border: none;
-  border-radius: 10px;
+  background: transparent;
+  border: 1px solid #4b4b4b;
+  border-radius: 8px;
   font-weight: 500;
+  color: #ececf1;
 }
 
 .new-chat-btn:hover {
-  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  background: #2b2b2b;
 }
 
 .session-list {
   flex: 1;
   overflow-y: auto;
-  padding: 0 12px;
+  padding: 0 10px;
+}
+
+.session-group {
+  margin-bottom: 16px;
 }
 
 .list-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 8px 8px;
+  padding: 10px 6px 6px;
   font-size: 12px;
-  color: #94a3b8;
+  color: #8e8ea0;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .list-count {
-  background: #334155;
-  padding: 2px 8px;
-  border-radius: 10px;
+  background: #2b2b2b;
+  padding: 2px 6px;
+  border-radius: 8px;
   font-size: 11px;
 }
 
 .session-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border-radius: 10px;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .session-item:hover {
-  background: #334155;
+  background: #2b2b2b;
+}
+
+.session-item:hover .session-actions {
+  opacity: 1;
 }
 
 .session-item.active {
-  background: #3b82f6;
+  background: #10a37f;
+}
+
+.session-item.active .session-icon,
+.session-item.active .session-name,
+.session-item.active .session-time {
+  color: #fff;
 }
 
 .session-icon {
-  font-size: 18px;
-  color: #94a3b8;
-}
-
-.session-item.active .session-icon {
-  color: #fff;
+  font-size: 16px;
+  color: #8e8ea0;
+  flex-shrink: 0;
 }
 
 .session-info {
@@ -776,10 +857,10 @@ watch(() => route.params.id, (newId) => {
 }
 
 .session-name {
-  margin: 0 0 4px;
-  font-size: 14px;
+  margin: 0 0 2px;
+  font-size: 13px;
   font-weight: 500;
-  color: #f1f5f9;
+  color: #ececf1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -787,8 +868,24 @@ watch(() => route.params.id, (newId) => {
 
 .session-time {
   margin: 0;
-  font-size: 12px;
-  color: #94a3b8;
+  font-size: 11px;
+  color: #8e8ea0;
+}
+
+.session-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.session-actions :deep(.el-button) {
+  color: #8e8ea0;
+  padding: 4px;
+}
+
+.session-actions :deep(.el-button:hover) {
+  color: #fff;
 }
 
 /* 右侧主区域 */
@@ -797,172 +894,75 @@ watch(() => route.params.id, (newId) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #f8fafc;
+  background: #ffffff;
 }
 
 .chat-header {
-  height: 64px;
-  background: #fff;
-  border-bottom: 1px solid #e2e8f0;
+  height: 56px;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e5e5;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 20px;
   flex-shrink: 0;
 }
 
 .header-title h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  color: #1e293b;
+  color: #202123;
 }
 
 .header-subtitle {
-  margin: 2px 0 0;
+  margin: 0;
   font-size: 11px;
-  color: #94a3b8;
+  color: #8e8ea0;
   font-family: monospace;
 }
 
 .message-list {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: 0;
 }
 
-/* 欢迎页 */
-.welcome-center {
+/* 空状态 */
+.empty-chat {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   min-height: 100%;
-}
-
-.welcome-card {
-  max-width: 560px;
   text-align: center;
-  padding: 48px;
-  background: #fff;
-  border-radius: 24px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
 }
 
-.welcome-icon {
-  width: 80px;
-  height: 80px;
-  background: linear-gradient(135deg, #eff6ff, #ede9fe);
-  border-radius: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 24px;
-  color: #3b82f6;
-}
-
-.welcome-card h1 {
+.empty-title {
   margin: 0 0 12px;
-  font-size: 28px;
-  color: #1e293b;
-}
-
-.welcome-desc {
-  margin: 0 0 32px;
-  color: #64748b;
-  font-size: 15px;
-  line-height: 1.6;
-}
-
-.welcome-examples {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 32px;
-}
-
-.example-chip {
-  padding: 12px 16px;
-  background: #f1f5f9;
-  border-radius: 12px;
-  font-size: 14px;
-  color: #475569;
-  cursor: pointer;
-  transition: all 0.2s;
-  text-align: left;
-}
-
-.example-chip:hover {
-  background: #e2e8f0;
-  transform: translateX(4px);
-}
-
-.welcome-start {
-  border-radius: 10px;
-  padding: 12px 32px;
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
-  border: none;
-}
-
-/* 聊天欢迎 */
-.welcome-chat {
-  display: flex;
-  align-items: flex-start;
-  max-width: 800px;
-}
-
-.ai-greeting {
-  display: flex;
-  gap: 14px;
-}
-
-.ai-avatar {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
+  font-size: 32px;
   font-weight: 600;
-  flex-shrink: 0;
+  color: #202123;
 }
 
-.greeting-bubble {
-  background: #fff;
-  padding: 18px 20px;
-  border-radius: 18px;
-  border-top-left-radius: 4px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  max-width: 600px;
-}
-
-.greeting-bubble p {
-  margin: 0 0 8px;
-  color: #334155;
-  line-height: 1.6;
-}
-
-.greeting-bubble ul {
-  margin: 8px 0 0;
-  padding-left: 20px;
-  color: #475569;
-  line-height: 1.8;
+.empty-desc {
+  margin: 0;
+  color: #6e6e80;
+  font-size: 15px;
 }
 
 /* 消息列表 */
 .message-wrapper {
   display: flex;
-  gap: 14px;
-  margin-bottom: 24px;
+  gap: 16px;
+  padding: 20px 0;
   width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
 }
 
 .message-wrapper.user {
   flex-direction: row-reverse;
-  margin-left: auto;
-  max-width: 80%;
 }
 
 .message-avatar {
@@ -970,9 +970,9 @@ watch(() => route.params.id, (newId) => {
 }
 
 .avatar {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -981,67 +981,39 @@ watch(() => route.params.id, (newId) => {
 }
 
 .user-avatar {
-  background: #e2e8f0;
-  color: #475569;
+  background: #10a37f;
+  color: #fff;
 }
 
 .ai-avatar {
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  background: #202123;
   color: #fff;
 }
 
 .message-content-box {
   flex: 1;
   min-width: 0;
-  max-width: calc(100% - 60px);
-}
-
-.message-wrapper:not(.user) .message-content-box {
-  max-width: 100%;
 }
 
 .message-wrapper.user .message-content-box {
   align-items: flex-end;
-  max-width: 100%;
 }
 
 .message-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-  font-size: 12px;
-}
-
-.message-wrapper.user .message-meta {
-  justify-content: flex-end;
-}
-
-.message-author {
-  font-weight: 500;
-  color: #334155;
-}
-
-.message-time {
-  color: #94a3b8;
+  display: none;
 }
 
 .message-body {
-  background: #fff;
-  padding: 14px 18px;
-  border-radius: 18px;
-  border-top-left-radius: 4px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  color: #334155;
-  font-size: 14px;
+  color: #374151;
+  font-size: 15px;
   line-height: 1.6;
 }
 
 .message-wrapper.user .message-body {
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
-  color: #fff;
-  border-top-left-radius: 18px;
-  border-top-right-radius: 4px;
+  background: #f7f7f8;
+  padding: 12px 16px;
+  border-radius: 12px;
+  color: #202123;
 }
 
 .raw-content {
@@ -1050,29 +1022,33 @@ watch(() => route.params.id, (newId) => {
   font-family: inherit;
 }
 
-/* 输入区 */
+/* 输入区：GPT 风格底部居中 */
 .chat-input-area {
-  background: #fff;
-  border-top: 1px solid #e2e8f0;
-  padding: 16px 24px 20px;
+  background: #ffffff;
+  padding: 12px 20px 24px;
   flex-shrink: 0;
+}
+
+.input-wrapper {
+  max-width: 768px;
+  margin: 0 auto;
 }
 
 .input-container {
   display: flex;
   align-items: flex-end;
-  gap: 12px;
-  background: #f1f5f9;
+  gap: 8px;
+  background: #ffffff;
   border-radius: 16px;
-  padding: 10px 12px 10px 16px;
-  border: 1px solid transparent;
+  padding: 8px 12px;
+  border: 1px solid #d9d9e3;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.06);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .input-container:focus-within {
-  border-color: #bfdbfe;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-  background: #fff;
+  border-color: #10a37f;
+  box-shadow: 0 0 15px rgba(16, 163, 127, 0.15);
 }
 
 .chat-input {
@@ -1083,54 +1059,61 @@ watch(() => route.params.id, (newId) => {
   background: transparent;
   border: none;
   box-shadow: none;
-  padding: 6px 0;
+  padding: 8px 0;
   font-size: 15px;
-  color: #1e293b;
+  color: #202123;
+  resize: none;
 }
 
 .chat-input :deep(.el-textarea__inner::placeholder) {
-  color: #94a3b8;
+  color: #8e8ea0;
 }
 
 .input-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .attach-btn {
-  color: #64748b;
+  color: #8e8ea0;
 }
 
 .send-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   padding: 0;
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  background: #10a37f;
   border: none;
 }
 
+.send-btn:hover {
+  background: #0d8c6d;
+}
+
 .send-btn:disabled {
-  background: #cbd5e1;
+  background: #d9d9e3;
+}
+
+.input-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
 }
 
 .input-hint {
-  margin: 8px 0 0;
-  text-align: center;
-  font-size: 12px;
-  color: #94a3b8;
-}
-
-.agent-selector-bar {
-  display: flex;
-  justify-content: center;
-  padding: 4px 0 0;
+  margin: 0;
+  font-size: 11px;
+  color: #8e8ea0;
 }
 
 .thinking-wrapper {
-  margin-bottom: 24px;
-  padding-left: 52px;
+  max-width: 800px;
+  margin: 0 auto 20px;
+  padding-left: 46px;
 }
 
 .header-action-text {
@@ -1151,7 +1134,7 @@ watch(() => route.params.id, (newId) => {
 }
 
 .user-info:hover {
-  background: #f1f5f9;
+  background: #f7f7f8;
 }
 
 .user-phone {

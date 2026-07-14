@@ -247,6 +247,27 @@ public class ProjectController {
         return ResponseEntity.ok(msg);
     }
 
+    @PatchMapping("/{id}")
+    public ResponseEntity<Project> updateProject(@PathVariable("id") String projectId,
+                                                 @RequestBody Map<String, Object> body,
+                                                 @CurrentUser Long userId) {
+        Project project = projectRepository.findByIdAndUserId(projectId, userId)
+            .orElse(null);
+        if (project == null) {
+            return ResponseEntity.notFound().build();
+        }
+        String name = (String) body.get("name");
+        if (name != null && !name.isBlank()) {
+            project.setName(name.trim());
+        }
+        String description = (String) body.get("description");
+        if (description != null) {
+            project.setDescription(description.trim());
+        }
+        projectRepository.save(project);
+        return ResponseEntity.ok(project);
+    }
+
     @GetMapping("/{id}/status")
     public ResponseEntity<Map<String, Object>> getStatus(@PathVariable("id") String projectId,
                                                          @CurrentUser Long userId) {

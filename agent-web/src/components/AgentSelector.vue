@@ -1,27 +1,27 @@
 <template>
   <div class="agent-selector">
     <button
-      v-for="agent in agents"
-      :key="agent.id"
-      :data-testid="agent.id"
-      :class="['agent-chip', { active: modelValue === agent.id }]"
-      @click="$emit('select', agent.id)"
+      v-if="modelValue === 'generic'"
+      data-testid="meichen"
+      class="agent-chip"
+      @click="$emit('select', 'meichen')"
     >
-      {{ agent.name }}
+      美陈 Agent
+    </button>
+    <button
+      v-else
+      data-testid="generic"
+      class="agent-chip active"
+      @click="$emit('select', 'generic')"
+    >
+      通用 Agent
     </button>
   </div>
 </template>
 
 <script setup lang="ts">
-import type { AgentOption } from '@/types/agent'
-
 defineProps<{ modelValue: string }>()
 defineEmits<{ (e: 'select', agentType: string): void }>()
-
-const agents: AgentOption[] = [
-  { id: 'generic', name: '通用 Agent' },
-  { id: 'meichen', name: '美陈 Agent' },
-]
 </script>
 
 <style scoped>
@@ -34,22 +34,22 @@ const agents: AgentOption[] = [
 .agent-chip {
   padding: 6px 12px;
   border-radius: 16px;
-  border: 1px solid #dcdfe6;
+  border: 1px solid #e0e0e0;
   background: #fff;
-  color: #606266;
+  color: #666;
   cursor: pointer;
   font-size: 13px;
   transition: all 0.2s ease;
 }
 
 .agent-chip:hover {
-  border-color: #409eff;
-  color: #409eff;
+  border-color: #10a37f;
+  color: #10a37f;
 }
 
 .agent-chip.active {
-  background: #409eff;
-  border-color: #409eff;
+  background: #10a37f;
+  border-color: #10a37f;
   color: #fff;
 }
 </style>

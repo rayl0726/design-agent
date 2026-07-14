@@ -4,6 +4,7 @@ export const projectApi = {
   create: (data) => request.post('/projects', data),
   list: () => request.get('/projects'),
   get: (id) => request.get(`/projects/${id}`),
+  update: (id, data) => request.patch(`/projects/${id}`, data),
   delete: (id) => request.delete(`/projects/${id}`),
   startWorkflow: (id, level = 'L3') => request.post(`/projects/${id}/workflow/start`, null, { params: { level } }),
   confirm: (id, level, feedback) =>
