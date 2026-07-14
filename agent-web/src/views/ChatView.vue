@@ -81,11 +81,9 @@
             <div class="welcome-icon">
               <el-icon :size="48"><MagicStick /></el-icon>
             </div>
-            <h1>美陈设计 Agent</h1>
-            <p class="welcome-desc">
-              告诉我你的设计需求，我将为你生成创意方案、现场效果图和可落地方案。
-            </p>
-            <div class="welcome-examples">
+            <h1>{{ welcomeTitle }}</h1>
+            <p class="welcome-desc">{{ welcomeDesc }}</p>
+            <div v-if="currentAgentType === 'meichen'" class="welcome-examples">
               <div class="example-chip" @click="quickStart('夏日海洋主题购物中心中庭吊饰，预算15万')">
                 夏日海洋主题购物中心中庭吊饰，预算15万
               </div>
@@ -94,6 +92,17 @@
               </div>
               <div class="example-chip" @click="quickStart('轻奢风格百货商场入口美陈，需要灯光装置')">
                 轻奢风格百货商场入口美陈，需要灯光装置
+              </div>
+            </div>
+            <div v-else class="welcome-examples">
+              <div class="example-chip" @click="quickStart('帮我制定一份暑期营销活动策划方案')">
+                帮我制定一份暑期营销活动策划方案
+              </div>
+              <div class="example-chip" @click="quickStart('分析一下最近三个月的销售数据趋势')">
+                分析一下最近三个月的销售数据趋势
+              </div>
+              <div class="example-chip" @click="quickStart('写一个适合商场中庭发布会的开场文案')">
+                写一个适合商场中庭发布会的开场文案
               </div>
             </div>
             <el-button type="primary" size="large" class="welcome-start" @click="createNewSession">
@@ -118,6 +127,7 @@
                   <span class="message-author">{{ msg.role === 'user' ? '你' : 'AI 助手' }}</span>
                   <span class="message-time">{{ formatTime(msg.createdAt) }}</span>
                 </div>
+                <ReasoningTrace v-if="msg.role !== 'user' && msg.reasoningTrace && msg.reasoningTrace.length" :trace="msg.reasoningTrace" />
                 <div class="message-body">
                   <TextMessage v-if="msg.messageType === 'text' || msg.messageType === 'summary'" :content="msg.content" />
                   <IdeaGallery v-else-if="msg.messageType === 'idea_gallery'" :ideas="parseJson(msg.content)" :project-id="sessionId" />
@@ -146,7 +156,7 @@
             type="textarea"
             :rows="2"
             resize="none"
-            placeholder="描述你的美陈设计需求，按 Enter 发送..."
+            :placeholder="inputPlaceholder"
             class="chat-input"
             @keydown.enter.prevent="sendMessage"
           />
@@ -164,6 +174,9 @@
               <el-icon><Promotion /></el-icon>
             </el-button>
           </div>
+        </div>
+        <div class="agent-selector-bar">
+          <AgentSelector :model-value="currentAgentType" @select="onAgentSelect" />
         </div>
         <p class="input-hint">按 Enter 发送，Shift + Enter 换行</p>
       </footer>
@@ -238,6 +251,8 @@ import TextMessage from '../components/chat/TextMessage.vue'
 import IdeaGallery from '../components/chat/IdeaGallery.vue'
 import ThinkingProcess from '../components/chat/ThinkingProcess.vue'
 import RecognitionDebug from '../components/chat/RecognitionDebug.vue'
+import AgentSelector from '../components/AgentSelector.vue'
+import ReasoningTrace from '../components/ReasoningTrace.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -255,8 +270,25 @@ const recognitionSummary = ref(null)
 const logDrawerOpen = ref(false)
 const stageLogs = ref([])
 const logLoading = ref(false)
+const currentAgentType = ref('generic')
 let eventSource = null
 let sseReconnectTimer = null
+
+const welcomeTitle = computed(() => {
+  return currentAgentType.value === 'meichen' ? '美陈设计 Agent' : '通用 Agent'
+})
+
+const welcomeDesc = computed(() => {
+  return currentAgentType.value === 'meichen'
+    ? '告诉我你的设计需求，我将为你生成创意方案、现场效果图和可落地方案。'
+    : '向我提出任何问题，我会自主规划任务、调用工具并给出可靠答案。'
+})
+
+const inputPlaceholder = computed(() => {
+  return currentAgentType.value === 'meichen'
+    ? '描述你的美陈设计需求，按 Enter 发送...'
+    : '输入你的问题或任务，按 Enter 发送...'
+})
 
 const sortedSessions = computed(() => {
   return [...sessions.value].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
@@ -328,6 +360,9 @@ const loadSession = async () => {
   try {
     const res = await projectApi.get(sessionId.value)
     session.value = res.data
+    if (res.data.agentType) {
+      currentAgentType.value = res.data.agentType
+    }
   } catch (e) {
     ElMessage.error('加载会话失败')
   }
@@ -391,14 +426,16 @@ const loadSessions = async () => {
   }
 }
 
-const createNewSession = async () => {
+const createNewSession = async (agentType = 'generic') => {
   creating.value = true
   try {
     const res = await projectApi.create({
       name: '新对话',
       description: '',
+      agent_type: agentType,
       inputs: [],
     })
+    currentAgentType.value = agentType
     await loadSessions()
     router.push(`/project/${res.data.id}`)
   } catch (e) {
@@ -408,8 +445,13 @@ const createNewSession = async () => {
   }
 }
 
+const onAgentSelect = async (agentType) => {
+  if (agentType === currentAgentType.value) return
+  await createNewSession(agentType)
+}
+
 const quickStart = async (text) => {
-  await createNewSession()
+  await createNewSession(currentAgentType.value)
   inputText.value = text
   // createNewSession 会改变 route，等跳转完成后再发送
   setTimeout(() => sendMessage(), 300)
@@ -1078,6 +1120,12 @@ watch(() => route.params.id, (newId) => {
   text-align: center;
   font-size: 12px;
   color: #94a3b8;
+}
+
+.agent-selector-bar {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 0;
 }
 
 .thinking-wrapper {
