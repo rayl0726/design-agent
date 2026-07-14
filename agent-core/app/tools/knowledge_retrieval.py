@@ -1,3 +1,5 @@
+import asyncio
+
 from app.runtime.tool import BaseTool, ToolResult
 from app.services import knowledge_base as kb
 
@@ -15,11 +17,14 @@ class KnowledgeRetrievalTool(BaseTool):
     }
 
     async def execute(self, inputs, context):
-        results = await kb.search(
-            query=inputs["query"],
-            agent_type=context.agent_type,
-            top_k=inputs.get("top_k", 5),
-        )
+        try:
+            results = await kb.search(
+                query=inputs["query"],
+                agent_type=context.agent_type,
+                top_k=inputs.get("top_k", 5),
+            )
+        except asyncio.TimeoutError:
+            results = []
         return ToolResult(
             observation=f"检索到 {len(results)} 条结果",
             data={"results": results}

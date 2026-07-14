@@ -283,5 +283,5 @@ async def search(
             timeout=30,
         )
     except asyncio.TimeoutError:
-        print(f"Knowledge base search timed out after 30s: query={query!r}")
+        logger.warning("Knowledge base search timed out after 30s: query=%r", query)
         return []
