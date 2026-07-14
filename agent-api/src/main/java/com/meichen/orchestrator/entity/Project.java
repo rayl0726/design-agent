@@ -62,6 +62,12 @@ public class Project {
     @Column(name = "public_id", unique = true, nullable = false, length = 32)
     private String publicId;
 
+    @Column(name = "agent_type", nullable = false, length = 30)
+    private String agentType = "generic";
+
+    @Column(name = "agent_context_json", columnDefinition = "TEXT")
+    private String agentContextJson;
+
     @CreationTimestamp
     private LocalDateTime createdAt;
 
@@ -120,6 +126,12 @@ public class Project {
 
     public String getPublicId() { return publicId; }
     public void setPublicId(String publicId) { this.publicId = publicId; }
+
+    public String getAgentType() { return agentType; }
+    public void setAgentType(String agentType) { this.agentType = agentType; }
+
+    public String getAgentContextJson() { return agentContextJson; }
+    public void setAgentContextJson(String agentContextJson) { this.agentContextJson = agentContextJson; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
