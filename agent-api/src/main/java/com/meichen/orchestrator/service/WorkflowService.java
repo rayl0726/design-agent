@@ -63,12 +63,18 @@ public class WorkflowService {
 
     @Transactional
     public Project createProject(String name, String description, Map<String, Object> inputs, Long userId) {
+        return createProject(name, description, inputs, userId, "generic");
+    }
+
+    @Transactional
+    public Project createProject(String name, String description, Map<String, Object> inputs, Long userId, String agentType) {
         Project project = new Project();
         project.setId(UUID.randomUUID().toString());
         project.setName(name);
         project.setDescription(description);
         project.setUserId(userId);
         project.setStatus("INIT");
+        project.setAgentType(agentType != null && !agentType.isBlank() ? agentType : "generic");
         project.setRawInputsJson(toJson(inputs));
         project = publicIdGenerator.assignAndSave(project, Project::setPublicId, projectRepository::save);
 

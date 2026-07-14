@@ -9,6 +9,7 @@ import com.meichen.orchestrator.service.DialogueService;
 import com.meichen.orchestrator.service.ThinkingLogService;
 import com.meichen.orchestrator.service.WorkflowService;
 import com.meichen.orchestrator.security.CurrentUser;
+import com.meichen.orchestrator.dispatcher.AgentDispatcher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -27,19 +28,22 @@ public class ProjectController {
     private final ThinkingLogService thinkingLogService;
     private final DialogueService dialogueService;
     private final ObjectMapper objectMapper;
+    private final AgentDispatcher agentDispatcher;
 
     public ProjectController(WorkflowService workflowService,
                              ProjectRepository projectRepository,
                              SessionMessageService sessionMessageService,
                              ThinkingLogService thinkingLogService,
                              DialogueService dialogueService,
-                             ObjectMapper objectMapper) {
+                             ObjectMapper objectMapper,
+                             AgentDispatcher agentDispatcher) {
         this.workflowService = workflowService;
         this.projectRepository = projectRepository;
         this.sessionMessageService = sessionMessageService;
         this.thinkingLogService = thinkingLogService;
         this.dialogueService = dialogueService;
         this.objectMapper = objectMapper;
+        this.agentDispatcher = agentDispatcher;
     }
 
     @GetMapping
@@ -51,6 +55,7 @@ public class ProjectController {
     public ResponseEntity<Project> createProject(
         @RequestParam("name") String name,
         @RequestParam(value = "description", required = false) String description,
+        @RequestParam(value = "agent_type", required = false, defaultValue = "generic") String agentType,
         @RequestParam(value = "text", required = false) String text,
         @RequestParam(value = "photos", required = false) List<MultipartFile> photos,
         @RequestParam(value = "cad", required = false) MultipartFile cad,
@@ -67,7 +72,7 @@ public class ProjectController {
         inputs.put("ppt_present", ppt != null);
         inputs.put("reference_count", references != null ? references.size() : 0);
 
-        Project project = workflowService.createProject(name, description, inputs, userId);
+        Project project = workflowService.createProject(name, description, inputs, userId, agentType);
         return ResponseEntity.ok(project);
     }
 
@@ -77,6 +82,11 @@ public class ProjectController {
         String name = (String) body.get("name");
         if (name == null || name.isEmpty()) {
             name = "未命名项目";
+        }
+
+        String agentType = (String) body.get("agent_type");
+        if (agentType == null || agentType.isBlank()) {
+            agentType = "generic";
         }
 
         String description = (String) body.get("description");
@@ -129,7 +139,7 @@ public class ProjectController {
             inputs.put("reference_count", 0);
         }
 
-        Project project = workflowService.createProject(name, description, inputs, userId);
+        Project project = workflowService.createProject(name, description, inputs, userId, agentType);
         return ResponseEntity.ok(project);
     }
 
@@ -217,17 +227,21 @@ public class ProjectController {
         } catch (Exception ignored) {}
         projectRepository.save(project);
 
-        String status = project.getStatus();
-        if ("INIT".equals(status) || "RECOMMENDATION_PENDING".equals(status)) {
-            dialogueService.handleUserMessage(projectId, content, userId);
-        } else if ("L1_PENDING".equals(status)) {
-            // 旧流程兼容：直接生成视觉方案
-            workflowService.startWorkflow(projectId, "L2", userId);
-        } else if ("L2_PENDING".equals(status)) {
-            // 已展示带图创意，用户选择后进入 L3 技术方案
-            workflowService.startWorkflow(projectId, "L3", userId);
-        } else if ("L3_PENDING".equals(status)) {
-            workflowService.startWorkflow(projectId, "L3", userId);
+        if ("meichen".equals(project.getAgentType())) {
+            String status = project.getStatus();
+            if ("INIT".equals(status) || "RECOMMENDATION_PENDING".equals(status)) {
+                dialogueService.handleUserMessage(projectId, content, userId);
+            } else if ("L1_PENDING".equals(status)) {
+                // 旧流程兼容：直接生成视觉方案
+                workflowService.startWorkflow(projectId, "L2", userId);
+            } else if ("L2_PENDING".equals(status)) {
+                // 已展示带图创意，用户选择后进入 L3 技术方案
+                workflowService.startWorkflow(projectId, "L3", userId);
+            } else if ("L3_PENDING".equals(status)) {
+                workflowService.startWorkflow(projectId, "L3", userId);
+            }
+        } else {
+            agentDispatcher.dispatch(project).handle(project, msg);
         }
 
         return ResponseEntity.ok(msg);
