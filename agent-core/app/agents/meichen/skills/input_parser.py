@@ -532,3 +532,32 @@ class PPTParser:
             "requirements": [],
             "notes": "PPT 解析功能开发中",
         }
+
+
+async def parse_input(inputs: dict[str, Any]) -> dict[str, Any]:
+    """入口包装：将原始输入统一转换为合并后的结构化需求。"""
+    text = inputs.get("text")
+    if text:
+        parser = TextParser()
+        parsed = await parser.parse(text)
+        merger = InputMerger()
+        return await merger.merge([parsed])
+
+    return {
+        "space_type": inputs.get("space_type"),
+        "budget": inputs.get("budget"),
+        "budget_level": None,
+        "theme": inputs.get("theme"),
+        "style": inputs.get("style"),
+        "target_audience": inputs.get("target_audience"),
+        "timeline": inputs.get("timeline"),
+        "material_restrictions": inputs.get("material_restrictions", []),
+        "special_requirements": inputs.get("special_requirements", []),
+        "color_preference": inputs.get("color_preference"),
+        "brand_positioning": inputs.get("brand_positioning"),
+        "design_system_preference": inputs.get("design_system_preference"),
+        "space_description": "",
+        "references": [],
+        "points": inputs.get("points", []),
+        "raw_inputs": [{"source_type": "structured", "data": inputs}],
+    }

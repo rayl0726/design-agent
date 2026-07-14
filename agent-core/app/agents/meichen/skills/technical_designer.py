@@ -302,3 +302,11 @@ class TechnicalDesignerAgent:
             "items": material_list,
             "over_budget": False,
         }
+
+
+async def design_technical(
+    concepts: dict[str, Any], visuals: dict[str, Any]
+) -> dict[str, Any]:
+    """入口包装：根据 L2 视觉方案与概念需求生成 L3 技术方案。"""
+    agent = TechnicalDesignerAgent()
+    return await agent.design(visuals, concepts, None)

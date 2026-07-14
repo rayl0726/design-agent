@@ -479,3 +479,9 @@ class RequirementAnalyst:
             }),
             "is_complete": False,
         }
+
+
+async def analyze_requirement(merged_input: dict[str, Any]) -> dict[str, Any]:
+    """入口包装：将合并后的输入转换为需求分析结果。"""
+    analyst = RequirementAnalyst()
+    return await analyst.analyze(merged_input)

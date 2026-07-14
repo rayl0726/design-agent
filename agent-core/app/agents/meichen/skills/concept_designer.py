@@ -271,3 +271,9 @@ class ConceptDesignerAgent:
             "level": "L1",
             "ideas": self._fallback_ideas(requirement),
         }
+
+
+async def design_concepts(requirement: dict[str, Any]) -> dict[str, Any]:
+    """入口包装：根据需求生成 L1 概念方案。"""
+    agent = ConceptDesignerAgent()
+    return await agent.design(requirement, {})
