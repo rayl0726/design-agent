@@ -15,10 +15,12 @@ class RequestAnalyzer:
         if not agent_config:
             raise ValueError(f"Unknown agent: {context.agent_type}")
         # TODO: replace with LLM structured output in production
+        extracted_fields = self._extract_fields(context.user_input)
+        context.working_memory["extracted_fields"] = extracted_fields
         understanding = {
             "agent_mode": agent_config.id,
             "intent": "design" if "meichen" in context.user_input or agent_config.id == "meichen" else "chat",
-            "extracted_fields": self._extract_fields(context.user_input),
+            "extracted_fields": extracted_fields,
         }
         return self.planner.create_plan(agent_config, understanding)
 

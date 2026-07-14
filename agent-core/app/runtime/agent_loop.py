@@ -63,22 +63,37 @@ class AgentLoop:
         )
 
     async def _execute_task(self, task: Task, context: AgentContext, iteration: int):
-        # Placeholder: real implementation selects tool based on task type
-        tool = self.tool_registry.get("respond_to_user")
         tool_context = ToolContext(
             conversation_id=context.conversation_id,
             agent_type=context.agent_type,
             working_memory=context.working_memory,
         )
+
+        extracted = context.working_memory.get("extracted_fields", {})
+        tool, inputs = self._select_tool(task, extracted)
+
         start = time.time()
-        output = await tool.execute({"task": task.id}, tool_context)
+        output = await tool.execute(inputs, tool_context)
         duration_ms = int((time.time() - start) * 1000)
+        is_final = tool.name in ("respond_to_user", "invoke_meichen_workflow") and task.id != "information_gathering"
         return _TaskExecutionResult(
-            is_final=True,
+            is_final=is_final,
             final_answer=output.data,
-            tool_calls=[ToolCall(iteration=iteration, tool_name=tool.name, inputs={"task": task.id}, output_summary=output.observation, duration_ms=duration_ms)],
+            tool_calls=[ToolCall(iteration=iteration, tool_name=tool.name, inputs=inputs, output_summary=output.observation, duration_ms=duration_ms)],
             reasoning_trace=[],
         )
+
+    def _select_tool(self, task: Task, extracted_fields: dict):
+        if task.id in ("generate_ideas", "invoke_meichen_workflow"):
+            return self.tool_registry.get("invoke_meichen_workflow"), extracted_fields
+
+        if task.id == "information_gathering" and task.required_fields:
+            missing = [f for f in task.required_fields if f not in extracted_fields]
+            if missing:
+                return self.tool_registry.get("ask_user"), {"question": f"请补充以下信息：{', '.join(missing)}"}
+            return self.tool_registry.get("respond_to_user"), {"answer": "信息已收集完整"}
+
+        return self.tool_registry.get("respond_to_user"), {"answer": f"任务 {task.id} 已完成"}
 
 
 @dataclass
