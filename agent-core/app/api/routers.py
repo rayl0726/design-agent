@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 
@@ -330,14 +331,42 @@ async def _generic_run_stream(user_input: str):
 
                 from app.runtime.tool import ToolContext
 
-                result = await web_search.execute(arguments, ToolContext(
-                    conversation_id="generic",
-                    agent_type="generic",
-                    working_memory={},
-                ))
-                observation = result.observation
-                log.info("Tool call done: %s, observation_len=%d", tool_name, len(observation))
-                yield f"event: tool_result\ndata: {json.dumps({'id': tool_call_id, 'tool_name': tool_name, 'arguments': arguments, 'observation': observation}, ensure_ascii=False)}\n\n"
+                queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+                async def emit(event_name: str, payload: dict, _id=tool_call_id):
+                    payload_with_id = {"id": _id, **payload}
+                    await queue.put(
+                        f"event: {event_name}\ndata: {json.dumps(payload_with_id, ensure_ascii=False)}\n\n"
+                    )
+
+                async def run_tool(_id=tool_call_id, _tool_name=tool_name, _arguments=arguments):
+                    try:
+                        result = await web_search.execute(
+                            _arguments,
+                            ToolContext(
+                                conversation_id="generic",
+                                agent_type="generic",
+                                working_memory={},
+                                emit=emit,
+                                tool_call_id=_id,
+                            ),
+                        )
+                        observation = result.observation
+                        log.info("Tool call done: %s, observation_len=%d", _tool_name, len(observation))
+                        await queue.put(
+                            f"event: tool_result\ndata: {json.dumps({'id': _id, 'tool_name': _tool_name, 'arguments': _arguments, 'observation': observation}, ensure_ascii=False)}\n\n"
+                        )
+                        return observation
+                    finally:
+                        await queue.put(None)
+
+                tool_task = asyncio.create_task(run_tool())
+                while True:
+                    item = await queue.get()
+                    if item is None:
+                        break
+                    yield item
+                observation = await tool_task
 
                 messages.append({
                     "role": "tool",
