@@ -357,6 +357,13 @@ async def _generic_run_stream(user_input: str):
                             f"event: tool_result\ndata: {json.dumps({'id': _id, 'tool_name': _tool_name, 'arguments': _arguments, 'observation': observation}, ensure_ascii=False)}\n\n"
                         )
                         return observation
+                    except Exception as exc:
+                        log.error("Tool call failed: %s(%s) error=%s", _tool_name, _arguments, exc, exc_info=True)
+                        observation = f"工具调用失败：{exc}"
+                        await queue.put(
+                            f"event: tool_result\ndata: {json.dumps({'id': _id, 'tool_name': _tool_name, 'arguments': _arguments, 'observation': observation}, ensure_ascii=False)}\n\n"
+                        )
+                        return observation
                     finally:
                         await queue.put(None)
 

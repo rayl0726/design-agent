@@ -577,25 +577,24 @@ const connectSse = (projectId) => {
           scrollToBottom()
         } else if (msg.event === 'tool_result') {
           const payload = JSON.parse(msg.data)
-          const toolMsg = messages.value
-            .slice()
-            .reverse()
-            .find((m) => {
-              if (m.role !== 'tool') return false
-              try {
-                const parsed = JSON.parse(m.content || '{}')
-                return !parsed.observation
-              } catch (e) {
-                return false
-              }
-            })
+          const toolMsg = messages.value.find(
+            (m) => m.role === 'tool' && m.content && m.content.includes(`"id":"${payload.id}"`)
+          )
           if (toolMsg) {
-            toolMsg.content = JSON.stringify({
-              id: payload.id,
-              tool_name: payload.tool_name,
-              arguments: payload.arguments,
-              observation: payload.observation,
-            })
+            try {
+              const data = JSON.parse(toolMsg.content)
+              data.observation = payload.observation
+              data.status = 'done'
+              toolMsg.content = JSON.stringify(data)
+            } catch (e) {
+              toolMsg.content = JSON.stringify({
+                id: payload.id,
+                tool_name: payload.tool_name,
+                arguments: payload.arguments,
+                observation: payload.observation,
+                status: 'done',
+              })
+            }
             scrollToBottom()
           } else {
             messages.value.push({
@@ -608,6 +607,7 @@ const connectSse = (projectId) => {
                 tool_name: payload.tool_name,
                 arguments: payload.arguments,
                 observation: payload.observation,
+                status: 'done',
               }),
               createdAt: new Date().toISOString(),
             })

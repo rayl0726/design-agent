@@ -57,13 +57,14 @@ class WebSearchTool(BaseTool):
     async def execute(self, inputs: dict[str, Any], context: ToolContext) -> ToolResult:
         query = inputs.get("query", "").strip()
         if not query:
-            return ToolResult(observation="Empty query", data={"results": []})
+            return ToolResult(observation="查询词为空", data={"results": []})
 
         logger.info("Web search start: query=%s", query)
 
-        # 1. 并行搜索 Bing + Baidu
-        bing_task = self.bing_client.search(query, limit=5)
-        baidu_task = self.baidu_client.search(query, limit=5)
+        # 1. 并行搜索 Bing + Baidu，使用更大的 limit 以提高过滤后仍保留至少 3 条结果的概率
+        search_limit = max(_MAX_RESULTS * 3, 10)
+        bing_task = self.bing_client.search(query, limit=search_limit)
+        baidu_task = self.baidu_client.search(query, limit=search_limit)
         bing_results, baidu_results = await self._safe_gather(bing_task, baidu_task)
 
         raw_results = bing_results + baidu_results
