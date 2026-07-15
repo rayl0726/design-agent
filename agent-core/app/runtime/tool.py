@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable, Awaitable
 
 
 @dataclass
@@ -8,6 +10,7 @@ class ToolContext:
     conversation_id: str
     agent_type: str
     working_memory: dict[str, Any]
+    emit: Callable[[str, dict], Awaitable[None] | None] | None = None
 
 
 @dataclass
