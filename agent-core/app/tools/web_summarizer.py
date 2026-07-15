@@ -33,6 +33,17 @@ async def summarize(query: str, fetched: list[dict[str, Any]], client: LLMClient
         + "\n\n".join(source_lines)
     )[:_MAX_TOTAL_CHARS]
 
+    def _format_raw_results(items: list[dict[str, Any]]) -> str:
+        lines: list[str] = []
+        for i, item in enumerate(items, 1):
+            flag = "（摘要）" if item.get("used_snippet_fallback") else ""
+            lines.append(
+                f"{i}. {item.get('title', '')}{flag}\n"
+                f"   链接：{item.get('link', '')}\n"
+                f"   内容：{item.get('text', '')}"
+            )
+        return "\n\n".join(lines)
+
     try:
         summary = await client.complete(_SUMMARY_SYSTEM_PROMPT, user_prompt, temperature=0.5)
         summary = summary.strip()
@@ -40,7 +51,11 @@ async def summarize(query: str, fetched: list[dict[str, Any]], client: LLMClient
             raise ValueError("empty summary")
     except Exception as e:
         logger.warning("Summary generation failed: %s", e)
-        summary = "已搜索到以下结果，但未能生成摘要，请直接查看来源。"
+        summary = (
+            "已搜索到以下结果，但未能生成摘要，请直接查看来源。\n\n"
+            + _format_raw_results(fetched)
+        )
+        return summary
 
     references = [f"{i}. {item.get('title', '')}\n   {item.get('link', '')}" for i, item in enumerate(fetched, 1)]
     return summary + "\n\n参考来源：\n" + "\n".join(references)

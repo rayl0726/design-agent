@@ -11,6 +11,7 @@ class ToolContext:
     agent_type: str
     working_memory: dict[str, Any]
     emit: Callable[[str, dict], Awaitable[None] | None] | None = None
+    tool_call_id: str | None = None
 
 
 @dataclass

@@ -33,3 +33,6 @@ async def test_summarize_fallback_when_llm_fails():
 
     assert "未能生成摘要" in result
     assert "https://a.com" in result
+    assert "正文一" in result
+    assert "链接：" in result
+    assert "1. T1" in result

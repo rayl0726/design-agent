@@ -16,6 +16,7 @@ async def test_web_search_emits_progress_and_returns_summary():
         agent_type="generic",
         working_memory={},
         emit=emit,
+        tool_call_id="call_abc123",
     )
 
     tool = WebSearchTool()
@@ -40,3 +41,6 @@ async def test_web_search_emits_progress_and_returns_summary():
     events = [e for e, _ in emitted]
     assert "tool_progress" in events
     assert any(p.get("status") == "summarizing" for _, p in emitted)
+
+    progress_payloads = [p for e, p in emitted if e == "tool_progress"]
+    assert all(p.get("id") == "call_abc123" for p in progress_payloads)

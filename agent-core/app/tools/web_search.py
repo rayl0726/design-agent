@@ -80,7 +80,11 @@ class WebSearchTool(BaseTool):
             )
 
         # 3. 发送总结中状态
-        await self._emit(context, "tool_progress", {"status": "summarizing", "detail": f"正在分析 {len(deduped)} 个网页"})
+        await self._emit(
+            context,
+            "tool_progress",
+            {"status": "summarizing", "detail": f"正在分析 {len(deduped)} 个网页"},
+        )
 
         # 4. 抓取正文
         fetched = await self.fetcher(deduped, client=self.client, max_pages=_MAX_RESULTS)
@@ -115,4 +119,6 @@ class WebSearchTool(BaseTool):
 
     async def _emit(self, context: ToolContext, event: str, payload: dict[str, Any]) -> None:
         if context.emit is not None:
+            if event == "tool_progress" and context.tool_call_id is not None:
+                payload = {"id": context.tool_call_id, **payload}
             await context.emit(event, payload)
