@@ -1,22 +1,27 @@
 from __future__ import annotations
 
+import asyncio
 import logging
-import urllib.parse
 from typing import Any
 
 import httpx
-from bs4 import BeautifulSoup
 
 from app.runtime.tool import BaseTool, ToolContext, ToolResult
+from app.services.llm_client import LLMClient
+from app.tools.search_clients import BingSearchClient, BaiduSearchClient, deduplicate_results
+from app.tools.web_fetcher import fetch_pages
+from app.tools.web_summarizer import summarize
 
 logger = logging.getLogger(__name__)
+
+_MAX_RESULTS = 3
 
 
 class WebSearchTool(BaseTool):
     name = "web_search"
     description = (
-        "Search the web for up-to-date information when the user's question "
-        "involves current events, real-time data, or facts that may change over time."
+        "Search the web (Bing + Baidu) for up-to-date information. "
+        "Fetches top pages and summarizes them in Chinese."
     )
     parameters = {
         "type": "object",
@@ -29,7 +34,12 @@ class WebSearchTool(BaseTool):
         "required": ["query"],
     }
 
-    def __init__(self, client: httpx.AsyncClient | None = None):
+    def __init__(
+        self,
+        client: httpx.AsyncClient | None = None,
+        bing_client: BingSearchClient | None = None,
+        baidu_client: BaiduSearchClient | None = None,
+    ):
         self.client = client or httpx.AsyncClient(
             timeout=httpx.Timeout(15.0),
             headers={
@@ -39,6 +49,10 @@ class WebSearchTool(BaseTool):
                 )
             },
         )
+        self.bing_client = bing_client or BingSearchClient(self.client)
+        self.baidu_client = baidu_client or BaiduSearchClient(self.client)
+        self.fetcher = fetch_pages
+        self.summarizer = summarize
 
     async def execute(self, inputs: dict[str, Any], context: ToolContext) -> ToolResult:
         query = inputs.get("query", "").strip()
@@ -46,44 +60,59 @@ class WebSearchTool(BaseTool):
             return ToolResult(observation="Empty query", data={"results": []})
 
         logger.info("Web search start: query=%s", query)
-        encoded = urllib.parse.quote(query)
-        url = f"https://cn.bing.com/search?q={encoded}"
 
-        try:
-            resp = await self.client.get(url, follow_redirects=True)
-            resp.raise_for_status()
-            results = self._parse_results(resp.text)
-            logger.info("Web search done: query=%s, results=%d", query, len(results))
-            summary = self._format_summary(results)
+        # 1. 并行搜索 Bing + Baidu
+        bing_task = self.bing_client.search(query, limit=5)
+        baidu_task = self.baidu_client.search(query, limit=5)
+        bing_results, baidu_results = await self._safe_gather(bing_task, baidu_task)
+
+        raw_results = bing_results + baidu_results
+        logger.info("Raw results: bing=%d, baidu=%d", len(bing_results), len(baidu_results))
+
+        # 2. 去重 + 取 Top N
+        deduped = deduplicate_results(raw_results)[:_MAX_RESULTS]
+        logger.info("Deduped results: %d", len(deduped))
+
+        if not deduped:
             return ToolResult(
-                observation=summary,
-                data={"query": query, "results": results},
-            )
-        except Exception as e:
-            logger.error("Web search failed: %s", e)
-            return ToolResult(
-                observation=f"搜索失败：{type(e).__name__}: {e}",
-                data={"query": query, "results": [], "error": str(e)},
+                observation="未找到有效搜索结果。",
+                data={"query": query, "results": []},
             )
 
-    def _parse_results(self, html: str) -> list[dict[str, str]]:
-        soup = BeautifulSoup(html, "html.parser")
-        results = []
-        for item in soup.select(".b_algo"):
-            title_tag = item.select_one("h2 a")
-            snippet_tag = item.select_one(".b_caption p") or item.select_one("p")
-            if not title_tag:
-                continue
-            title = title_tag.get_text(strip=True)
-            link = title_tag.get("href", "")
-            snippet = snippet_tag.get_text(strip=True) if snippet_tag else ""
-            results.append({"title": title, "link": link, "snippet": snippet})
-        return results[:5]
+        # 3. 发送总结中状态
+        await self._emit(context, "tool_progress", {"status": "summarizing", "detail": f"正在分析 {len(deduped)} 个网页"})
 
-    def _format_summary(self, results: list[dict[str, str]]) -> str:
-        if not results:
-            return "未找到相关网页结果。"
-        lines = ["搜索结果："]
-        for i, r in enumerate(results, 1):
-            lines.append(f"{i}. {r['title']}\n   {r['snippet']}\n   链接：{r['link']}")
-        return "\n".join(lines)
+        # 4. 抓取正文
+        fetched = await self.fetcher(deduped, client=self.client, max_pages=_MAX_RESULTS)
+
+        # 5. LLM 摘要
+        llm_client = LLMClient()
+        summary = await self.summarizer(query, fetched, llm_client)
+
+        logger.info("Web search done: query=%s, summary_len=%d", query, len(summary))
+
+        return ToolResult(
+            observation=summary,
+            data={
+                "query": query,
+                "results": [
+                    {"title": r.get("title"), "link": r.get("link"), "source": r.get("source")}
+                    for r in deduped
+                ],
+            },
+        )
+
+    async def _safe_gather(self, *awaitables):
+        results = await asyncio.gather(*awaitables, return_exceptions=True)
+        out = []
+        for r in results:
+            if isinstance(r, Exception):
+                logger.warning("Search source failed: %s", r)
+                out.append([])
+            else:
+                out.append(r)
+        return out
+
+    async def _emit(self, context: ToolContext, event: str, payload: dict[str, Any]) -> None:
+        if context.emit is not None:
+            await context.emit(event, payload)
