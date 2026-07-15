@@ -156,8 +156,9 @@ class BaiduSearchClient:
         results = []
         # 百度结果常见容器：.result、.c-container
         for item in soup.select(".result, .c-container"):
-            # 跳过广告节点
-            if item.get("data-tuiguang") or "ec_" in " ".join(item.get("class", [])):
+            # 跳过广告节点：仅当 class 以 ec_ 开头时才是百度推广广告
+            classes = item.get("class", [])
+            if item.get("data-tuiguang") or any(c.startswith("ec_") for c in classes):
                 continue
             title_tag = item.select_one("h3 a, .t a")
             if not title_tag:

@@ -50,6 +50,10 @@ def test_baidu_client_filters_ad_html():
         <h3><a href="https://ad.com">广告商品</a></h3>
         <div class="content-right">推广文案</div>
       </div>
+      <div class="result ec_xxx">
+        <h3><a href="https://ad2.com">竞价商品</a></h3>
+        <div class="content-right">竞价文案</div>
+      </div>
       <div class="result">
         <h3><a href="https://news.com/1">正常新闻标题</a></h3>
         <div class="content-right_8ZsVx">正常摘要</div>
@@ -61,6 +65,22 @@ def test_baidu_client_filters_ad_html():
     assert len(results) == 1
     assert results[0]["title"] == "正常新闻标题"
     assert results[0]["link"] == "https://news.com/1"
+
+
+def test_baidu_client_does_not_filter_rec_result():
+    html = """
+    <html>
+      <div class="result rec_result">
+        <h3><a href="https://news.com/2">推荐结果标题</a></h3>
+        <div class="content-right_8ZsVx">推荐结果摘要</div>
+      </div>
+    </html>
+    """
+    client = BaiduSearchClient()
+    results = client._parse(html)
+    assert len(results) == 1
+    assert results[0]["title"] == "推荐结果标题"
+    assert results[0]["link"] == "https://news.com/2"
 
 
 def test_bing_client_parse_results():
