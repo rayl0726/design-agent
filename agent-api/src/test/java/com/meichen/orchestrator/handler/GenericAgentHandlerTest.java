@@ -41,4 +41,11 @@ class GenericAgentHandlerTest {
 
         assertThat(delta).isNull();
     }
+
+    @Test
+    void extractStatus_shouldReturnSummarizing() {
+        String data = "{\"id\":\"call-1\",\"status\":\"summarizing\",\"detail\":\"x\"}";
+        String status = GenericAgentHandler.extractStatus(objectMapper, data);
+        assertThat(status).isEqualTo("summarizing");
+    }
 }

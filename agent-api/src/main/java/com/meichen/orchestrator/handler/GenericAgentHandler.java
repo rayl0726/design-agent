@@ -87,6 +87,15 @@ public class GenericAgentHandler implements AgentHandler {
                         } catch (Exception ex) {
                             log.warn("Failed to parse tool_result data: {}", event.data(), ex);
                         }
+                    } else if ("tool_progress".equals(eventName)) {
+                        try {
+                            Object payload = objectMapper.readValue(
+                                event.data(), new TypeReference<java.util.Map<String, Object>>() {}
+                            );
+                            sseEmitterService.sendToProject(project.getId(), eventName, payload);
+                        } catch (Exception ex) {
+                            log.warn("Failed to parse tool_progress data: {}", event.data(), ex);
+                        }
                     }
                 })
                 .blockLast();
@@ -106,6 +115,15 @@ public class GenericAgentHandler implements AgentHandler {
             return objectMapper.readTree(data).path("delta").asText(null);
         } catch (Exception e) {
             log.warn("Failed to parse text_delta data: {}", data, e);
+            return null;
+        }
+    }
+
+    static String extractStatus(ObjectMapper objectMapper, String data) {
+        try {
+            return objectMapper.readTree(data).path("status").asText(null);
+        } catch (Exception e) {
+            log.warn("Failed to parse tool_progress data: {}", data, e);
             return null;
         }
     }
