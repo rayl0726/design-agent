@@ -33,13 +33,14 @@ async def fetch_pages(
                 resp = await client.get(link, follow_redirects=True, timeout=timeout)
                 resp.raise_for_status()
                 text = _extract_main_text(resp.text)
-                if not text:
+                used_snippet_fallback = not text
+                if used_snippet_fallback:
                     text = snippet
                 return {
                     "title": title,
                     "link": link,
                     "text": text[:_MAX_CONTENT_LENGTH],
-                    "used_snippet_fallback": False,
+                    "used_snippet_fallback": used_snippet_fallback,
                 }
             except Exception as e:
                 logger.warning("Fetch failed for %s: %s", link, e)
