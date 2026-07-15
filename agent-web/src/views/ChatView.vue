@@ -137,11 +137,13 @@
                   <div class="tool-header">
                     <span class="tool-icon">🔍</span>
                     <span class="tool-name">{{ toolDisplay(msg).toolName }}</span>
-                    <span v-if="!toolDisplay(msg).observation && msg.role === 'tool'" class="tool-status running">查询中...</span>
-                    <span v-else class="tool-status done">已完成</span>
+                    <span class="tool-status running">{{ getToolStatusLabel(toolDisplay(msg).status) }}</span>
                   </div>
                   <div v-if="toolDisplay(msg).toolArguments && toolDisplay(msg).toolArguments.query" class="tool-query">
                     查询：{{ toolDisplay(msg).toolArguments.query }}
+                  </div>
+                  <div v-if="toolDisplay(msg).detail" class="tool-detail">
+                    {{ toolDisplay(msg).detail }}
                   </div>
                   <div v-if="toolDisplay(msg).observation" class="tool-body">
                     <pre>{{ toolDisplay(msg).observation }}</pre>
@@ -282,6 +284,7 @@ import ThinkingProcess from '../components/chat/ThinkingProcess.vue'
 import RecognitionDebug from '../components/chat/RecognitionDebug.vue'
 import AgentSelector from '../components/AgentSelector.vue'
 import ReasoningTrace from '../components/ReasoningTrace.vue'
+import { parseToolMessage, getToolStatusLabel } from '@/utils/toolMessage'
 
 const route = useRoute()
 const router = useRouter()
@@ -417,37 +420,7 @@ const isToolCallMessage = (msg) => {
   return msg.content.includes('<tool_call>')
 }
 
-const toolDisplay = (msg) => {
-  if (!msg) {
-    return { toolName: '工具', toolArguments: {}, observation: '' }
-  }
-  // 新格式：role='tool' 的 JSON 数据
-  if (msg.role === 'tool') {
-    try {
-      const data = typeof msg.content === 'string' ? JSON.parse(msg.content) : msg.content
-      return {
-        toolName: data.tool_name || '工具',
-        toolArguments: data.arguments || {},
-        observation: data.observation || '',
-      }
-    } catch (e) {
-      return { toolName: '工具', toolArguments: {}, observation: msg.content || '' }
-    }
-  }
-  // 兼容旧脏数据：assistant 文本中包含 <tool_call> XML
-  if (typeof msg.content === 'string' && msg.content.includes('<tool_call>')) {
-    const match = msg.content.match(/<tool_call>([\s\S]*?)<\/tool_call>/)
-    const raw = match ? match[1] : msg.content
-    const toolNameMatch = raw.match(/^(\w+)/)
-    const queryMatch = raw.match(/<arg_key>query<\/arg_key>\s*<arg_value>([\s\S]*?)<\/arg_value>/)
-    return {
-      toolName: toolNameMatch ? toolNameMatch[1] : '工具',
-      toolArguments: queryMatch ? { query: queryMatch[1].trim() } : {},
-      observation: '',
-    }
-  }
-  return { toolName: '工具', toolArguments: {}, observation: '' }
-}
+const toolDisplay = (msg) => parseToolMessage(msg?.content)
 
 const loadSession = async () => {
   if (!sessionId.value) {
@@ -589,6 +562,9 @@ const connectSse = (projectId) => {
               id: payload.id,
               tool_name: payload.tool_name,
               arguments: payload.arguments,
+              status: 'searching',
+              detail: '正在搜索...',
+              observation: '',
             }),
             createdAt: new Date().toISOString(),
           }
@@ -637,6 +613,22 @@ const connectSse = (projectId) => {
             })
             scrollToBottom()
           }
+        } else if (msg.event === 'tool_progress') {
+          const payload = JSON.parse(msg.data)
+          const existing = messages.value.find(
+            (m) => m.role === 'tool' && m.content && m.content.includes(`"id":"${payload.id}"`)
+          )
+          if (existing) {
+            try {
+              const data = JSON.parse(existing.content)
+              data.status = payload.status
+              data.detail = payload.detail || ''
+              existing.content = JSON.stringify(data)
+            } catch (e) {
+              // ignore
+            }
+          }
+          scrollToBottom()
         } else if (msg.event === 'text_delta') {
           let delta = ''
           try {
