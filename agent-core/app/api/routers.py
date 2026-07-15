@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import json
+import re
+
 from fastapi import APIRouter, Body
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.agents.meichen.skills.input_parser import PhotoParser, VideoParser, CADParser, PDFParser, PPTParser, ReferenceParser, TextParser, InputMerger
@@ -13,6 +17,8 @@ from app.services.doc_generator import doc_generator
 from app.services.negative_prompt_builder import NegativePromptBuilder
 from app.services.prompt_template_loader import PromptTemplateLoader
 from app.services.prompt_template_renderer import PromptTemplateRenderer
+from app.services.llm_client import LLMClient
+from app.tools.web_search import WebSearchTool
 from app.api.endpoints import debug, learning, admin_metrics
 
 router = APIRouter()
@@ -241,4 +247,151 @@ async def preview_prompt(req: PromptPreviewRequest) -> PromptPreviewResponse:
         negative=rendered.negative,
         template_version=rendered.version,
         aspect_ratio=rendered.aspect_ratio,
+    )
+
+
+# ---------- 通用 Agent Runtime ----------
+
+class AgentRunRequest(BaseModel):
+    conversationId: str
+    userInput: str
+    contextJson: str | None = None
+
+
+def _chunk_text(text: str, chunk_size: int = 1):
+    for i in range(0, len(text), chunk_size):
+        yield text[i : i + chunk_size]
+
+
+WEB_SEARCH_TOOL_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "web_search",
+        "description": "当问题涉及最新资讯、实时信息或需要查询网页时，使用此工具搜索互联网。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "用于搜索引擎的中文或英文查询词。",
+                }
+            },
+            "required": ["query"],
+        },
+    },
+}
+
+
+async def _generic_run_stream(user_input: str):
+    import logging
+
+    log = logging.getLogger(__name__)
+    client = LLMClient()
+    web_search = WebSearchTool()
+
+    system_prompt = (
+        "你是美陈设计平台的通用 AI 助手，能够调用 web_search 工具查询互联网获取最新信息。\n"
+        "规则：\n"
+        "1. 当用户问题涉及最新资讯、实时数据、当前事件、天气、股价、最新政策等你无法直接确认的事实，"
+        "   或者问题明显需要联网查询时，必须调用 web_search 工具。\n"
+        "2. 对于常识性问题、问候、简单数学/逻辑/编程问题、历史事实、已明确的知识，直接回答，不要调用工具。\n"
+        "3. 调用工具时，请通过 function calling 机制返回 tool_calls，不要在回答文本中输出任何类似 "
+        "   `<tool_call>...</tool_call>` 的 XML 标记。\n"
+        "4. 请用中文简洁、准确地回答。"
+    )
+
+    messages: list[dict] = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_input},
+    ]
+
+    try:
+        # 1. Decide whether tools are needed
+        first = await client.chat(system_prompt, user_input, tools=[WEB_SEARCH_TOOL_SCHEMA])
+
+        # 2. Execute tool calls if any
+        if first.tool_calls:
+            assistant_msg: dict = {"role": "assistant", "content": first.content}
+            if first.tool_calls:
+                assistant_msg["tool_calls"] = first.tool_calls
+            messages.append(assistant_msg)
+
+            for tc in first.tool_calls:
+                func = tc.get("function", {})
+                tool_name = func.get("name", "unknown")
+                try:
+                    arguments = json.loads(func.get("arguments", "{}"))
+                except json.JSONDecodeError:
+                    arguments = {}
+
+                tool_call_id = tc.get("id", "")
+                log.info("Tool call start: %s(%s)", tool_name, arguments)
+                yield f"event: tool_start\ndata: {json.dumps({'id': tool_call_id, 'tool_name': tool_name, 'arguments': arguments}, ensure_ascii=False)}\n\n"
+
+                from app.runtime.tool import ToolContext
+
+                result = await web_search.execute(arguments, ToolContext(
+                    conversation_id="generic",
+                    agent_type="generic",
+                    working_memory={},
+                ))
+                observation = result.observation
+                log.info("Tool call done: %s, observation_len=%d", tool_name, len(observation))
+                yield f"event: tool_result\ndata: {json.dumps({'id': tool_call_id, 'tool_name': tool_name, 'arguments': arguments, 'observation': observation}, ensure_ascii=False)}\n\n"
+
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.get("id", ""),
+                    "content": observation,
+                })
+
+            # 3. Generate final answer with tool results
+            final_payload = {
+                "model": client.primary_provider.model if hasattr(client.primary_provider, "model") else "glm-4.7-flash",
+                "messages": messages,
+                "stream": False,
+                "temperature": 0.7,
+            }
+            final_resp = await client.primary_provider.client.post(
+                f"{client.primary_provider.base_url}/chat/completions",
+                json=final_payload,
+                headers={"Authorization": f"Bearer {client.primary_provider.api_key}"},
+                timeout=180.0,
+            )
+            final_resp.raise_for_status()
+            answer = final_resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+            answer = re.sub(r"<tool_call>[\s\S]*?</tool_call>", "", answer).strip()
+            if not answer:
+                answer = "已为您完成搜索，但未生成有效回答。"
+            for chunk in _chunk_text(answer, chunk_size=1):
+                yield f"event: text_delta\ndata: {json.dumps({'delta': chunk}, ensure_ascii=False)}\n\n"
+        else:
+            # No tool call needed; stream the answer directly
+            try:
+                async for delta in client.stream(system_prompt, user_input):
+                    if delta:
+                        yield f"event: text_delta\ndata: {json.dumps({'delta': delta}, ensure_ascii=False)}\n\n"
+            except Exception as e:
+                log.warning("Streaming failed (%s), falling back to complete + simulated streaming", e)
+                answer = await client.complete(system_prompt, user_input)
+                for chunk in _chunk_text(answer, chunk_size=1):
+                    yield f"event: text_delta\ndata: {json.dumps({'delta': chunk}, ensure_ascii=False)}\n\n"
+    except Exception as e:
+        log.error("Generic agent run failed: %s", e, exc_info=True)
+        error_msg = f"抱歉，处理过程中出现错误：{e}"
+        for chunk in _chunk_text(error_msg, chunk_size=1):
+            yield f"event: text_delta\ndata: {json.dumps({'delta': chunk}, ensure_ascii=False)}\n\n"
+    yield "event: done\ndata: {}\n\n"
+
+
+@router.post("/agents/{agent_id}/run")
+async def run_agent(agent_id: str, req: AgentRunRequest):
+    if agent_id == "generic":
+        return StreamingResponse(
+            _generic_run_stream(req.userInput),
+            media_type="text/event-stream",
+        )
+    return StreamingResponse(
+        _generic_run_stream(req.userInput),
+        media_type="text/event-stream",
     )

@@ -121,7 +121,7 @@
 
         <!-- 消息列表 -->
         <template v-if="sessionId">
-          <template v-for="(msg, idx) in messages" :key="msg.id">
+          <template v-for="(msg, idx) in renderMessages" :key="msg.id">
             <div class="message-wrapper" :class="msg.role">
               <div class="message-avatar">
                 <div v-if="msg.role === 'user'" class="avatar user-avatar">我</div>
@@ -133,7 +133,21 @@
                   <span class="message-time">{{ formatTime(msg.createdAt) }}</span>
                 </div>
                 <ReasoningTrace v-if="msg.role !== 'user' && msg.reasoningTrace && msg.reasoningTrace.length" :trace="msg.reasoningTrace" />
-                <div class="message-body">
+                <div v-if="msg.role === 'tool' || isToolCallMessage(msg)" class="tool-card">
+                  <div class="tool-header">
+                    <span class="tool-icon">🔍</span>
+                    <span class="tool-name">{{ toolDisplay(msg).toolName }}</span>
+                    <span v-if="!toolDisplay(msg).observation && msg.role === 'tool'" class="tool-status running">查询中...</span>
+                    <span v-else class="tool-status done">已完成</span>
+                  </div>
+                  <div v-if="toolDisplay(msg).toolArguments && toolDisplay(msg).toolArguments.query" class="tool-query">
+                    查询：{{ toolDisplay(msg).toolArguments.query }}
+                  </div>
+                  <div v-if="toolDisplay(msg).observation" class="tool-body">
+                    <pre>{{ toolDisplay(msg).observation }}</pre>
+                  </div>
+                </div>
+                <div v-else class="message-body">
                   <TextMessage v-if="msg.messageType === 'text' || msg.messageType === 'summary'" :content="msg.content" />
                   <IdeaGallery v-else-if="msg.messageType === 'idea_gallery'" :ideas="parseJson(msg.content)" :project-id="sessionId" />
                   <pre v-else class="raw-content">{{ msg.content }}</pre>
@@ -336,9 +350,22 @@ const stageLogTree = computed(() => {
   }))
 })
 
+const isPureToolCall = (content) => {
+  if (!content || typeof content !== 'string') return false
+  return /^\s*<tool_call>[\s\S]*?<\/tool_call>\s*$/.test(content)
+}
+
+const renderMessages = computed(() => {
+  return messages.value.filter((msg) => {
+    // 过滤掉旧版 assistant 消息中只包含 tool_call 标记的脏数据，
+    // 这些调用过程应由 role='tool' 的消息或 SSE tool_start/tool_result 展示。
+    return !(msg.role === 'assistant' && isPureToolCall(msg.content))
+  })
+})
+
 const lastUserMessageIndex = computed(() => {
-  for (let i = messages.value.length - 1; i >= 0; i--) {
-    if (messages.value[i].role === 'user') return i
+  for (let i = renderMessages.value.length - 1; i >= 0; i--) {
+    if (renderMessages.value[i].role === 'user') return i
   }
   return -1
 })
@@ -385,13 +412,52 @@ const scrollToBottom = () => {
   })
 }
 
+const isToolCallMessage = (msg) => {
+  if (!msg || !msg.content || typeof msg.content !== 'string') return false
+  return msg.content.includes('<tool_call>')
+}
+
+const toolDisplay = (msg) => {
+  if (!msg) {
+    return { toolName: '工具', toolArguments: {}, observation: '' }
+  }
+  // 新格式：role='tool' 的 JSON 数据
+  if (msg.role === 'tool') {
+    try {
+      const data = typeof msg.content === 'string' ? JSON.parse(msg.content) : msg.content
+      return {
+        toolName: data.tool_name || '工具',
+        toolArguments: data.arguments || {},
+        observation: data.observation || '',
+      }
+    } catch (e) {
+      return { toolName: '工具', toolArguments: {}, observation: msg.content || '' }
+    }
+  }
+  // 兼容旧脏数据：assistant 文本中包含 <tool_call> XML
+  if (typeof msg.content === 'string' && msg.content.includes('<tool_call>')) {
+    const match = msg.content.match(/<tool_call>([\s\S]*?)<\/tool_call>/)
+    const raw = match ? match[1] : msg.content
+    const toolNameMatch = raw.match(/^(\w+)/)
+    const queryMatch = raw.match(/<arg_key>query<\/arg_key>\s*<arg_value>([\s\S]*?)<\/arg_value>/)
+    return {
+      toolName: toolNameMatch ? toolNameMatch[1] : '工具',
+      toolArguments: queryMatch ? { query: queryMatch[1].trim() } : {},
+      observation: '',
+    }
+  }
+  return { toolName: '工具', toolArguments: {}, observation: '' }
+}
+
 const loadSession = async () => {
   if (!sessionId.value) {
     session.value = {}
     return
   }
+  const currentId = sessionId.value
   try {
     const res = await projectApi.get(sessionId.value)
+    if (sessionId.value !== currentId) return
     session.value = res.data
     if (res.data.agentType) {
       currentAgentType.value = res.data.agentType
@@ -406,8 +472,10 @@ const loadMessages = async () => {
     messages.value = []
     return
   }
+  const currentId = sessionId.value
   try {
     const res = await messageApi.list(sessionId.value)
+    if (sessionId.value !== currentId) return
     messages.value = res.data
     scrollToBottom()
   } catch (e) {
@@ -510,6 +578,80 @@ const connectSse = (projectId) => {
         if (msg.event === 'status') {
           session.value.status = data.status
           if (data.current_level) session.value.currentLevel = data.current_level
+        } else if (msg.event === 'tool_start') {
+          const payload = JSON.parse(msg.data)
+          const toolMsg = {
+            id: `tool-${Date.now()}`,
+            projectId: projectId,
+            role: 'tool',
+            messageType: 'tool',
+            content: JSON.stringify({
+              id: payload.id,
+              tool_name: payload.tool_name,
+              arguments: payload.arguments,
+            }),
+            createdAt: new Date().toISOString(),
+          }
+          const lastUserIndex = messages.value.map((m) => m.role).lastIndexOf('user')
+          if (lastUserIndex >= 0) {
+            messages.value.splice(lastUserIndex + 1, 0, toolMsg)
+          } else {
+            messages.value.push(toolMsg)
+          }
+          scrollToBottom()
+        } else if (msg.event === 'tool_result') {
+          const payload = JSON.parse(msg.data)
+          const toolMsg = messages.value
+            .slice()
+            .reverse()
+            .find((m) => {
+              if (m.role !== 'tool') return false
+              try {
+                const parsed = JSON.parse(m.content || '{}')
+                return !parsed.observation
+              } catch (e) {
+                return false
+              }
+            })
+          if (toolMsg) {
+            toolMsg.content = JSON.stringify({
+              id: payload.id,
+              tool_name: payload.tool_name,
+              arguments: payload.arguments,
+              observation: payload.observation,
+            })
+            scrollToBottom()
+          } else {
+            messages.value.push({
+              id: `tool-${Date.now()}`,
+              projectId: projectId,
+              role: 'tool',
+              messageType: 'tool',
+              content: JSON.stringify({
+                id: payload.id,
+                tool_name: payload.tool_name,
+                arguments: payload.arguments,
+                observation: payload.observation,
+              }),
+              createdAt: new Date().toISOString(),
+            })
+            scrollToBottom()
+          }
+        } else if (msg.event === 'text_delta') {
+          let delta = ''
+          try {
+            const parsed = JSON.parse(msg.data)
+            delta = typeof parsed === 'string' ? parsed : (parsed.delta || '')
+          } catch (e) {
+            delta = msg.data || ''
+          }
+          const streamingMsg = messages.value.find(
+            (m) => m.role === 'assistant' && m.streaming
+          )
+          if (streamingMsg && delta) {
+            streamingMsg.content += delta
+            scrollToBottom()
+          }
         } else if (msg.event === 'message') {
           const exists = messages.value.find((m) => m.id === data.id)
           if (!exists) {
@@ -529,6 +671,21 @@ const connectSse = (projectId) => {
                 scrollToBottom()
                 return
               }
+            }
+            const streamingIndex = messages.value.findIndex(
+              (m) => m.role === 'assistant' && m.streaming
+            )
+            if (data.role === 'assistant' && streamingIndex >= 0) {
+              messages.value[streamingIndex] = {
+                id: data.id,
+                projectId: projectId,
+                role: data.role,
+                messageType: data.message_type,
+                content: data.content,
+                createdAt: data.created_at,
+              }
+              scrollToBottom()
+              return
             }
             messages.value.push({
               id: data.id,
@@ -623,6 +780,7 @@ const sendMessage = async () => {
 
   sending.value = true
   const tempId = `temp-${Date.now()}`
+  const streamingId = `streaming-${Date.now()}`
   messages.value.push({
     id: tempId,
     projectId: projectId,
@@ -631,6 +789,15 @@ const sendMessage = async () => {
     content: text,
     createdAt: new Date().toISOString(),
   })
+  messages.value.push({
+    id: streamingId,
+    projectId: projectId,
+    role: 'assistant',
+    messageType: 'text',
+    content: '',
+    createdAt: new Date().toISOString(),
+    streaming: true,
+  })
   inputText.value = ''
   scrollToBottom()
 
@@ -638,7 +805,7 @@ const sendMessage = async () => {
     await messageApi.send(projectId, text)
   } catch (e) {
     ElMessage.error('发送失败')
-    messages.value = messages.value.filter((m) => m.id !== tempId)
+    messages.value = messages.value.filter((m) => m.id !== tempId && m.id !== streamingId)
   } finally {
     sending.value = false
   }
@@ -713,11 +880,13 @@ onUnmounted(() => {
   disconnectSse()
 })
 
-watch(() => route.params.id, (newId) => {
+watch(() => route.params.id, async (newId) => {
   sessionId.value = newId || null
-  loadSession()
-  loadMessages()
-  loadThinkingLogs()
+  disconnectSse()
+  messages.value = []
+  await loadSession()
+  await loadMessages()
+  await loadThinkingLogs()
   connectSse(newId)
 })
 </script>
@@ -1020,6 +1189,64 @@ watch(() => route.params.id, (newId) => {
   margin: 0;
   white-space: pre-wrap;
   font-family: inherit;
+}
+
+.tool-card {
+  margin: 8px 0;
+  padding: 12px 16px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  max-width: 640px;
+  font-size: 14px;
+  color: #374151;
+}
+
+.tool-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.tool-icon {
+  font-size: 14px;
+}
+
+.tool-name {
+  font-weight: 600;
+  color: #111827;
+}
+
+.tool-status {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin-left: auto;
+}
+
+.tool-status.running {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.tool-status.done {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.tool-query {
+  color: #4b5563;
+  margin-bottom: 8px;
+}
+
+.tool-body pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  color: #374151;
+  line-height: 1.5;
 }
 
 /* 输入区：GPT 风格底部居中 */

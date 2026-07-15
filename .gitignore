@@ -10,6 +10,7 @@ node_modules/
 .vscode
 .trae/
 .superpowers/
+.worktrees/
 design-data
 docker-compose.yml
 agent-core/.venv/

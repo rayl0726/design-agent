@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AgentDispatcherTest {
 
-    private final GenericAgentHandler genericHandler = new GenericAgentHandler(null, "http://localhost:8000", null);
+    private final GenericAgentHandler genericHandler = new GenericAgentHandler(null, "http://localhost:8000", null, null, null, null);
     private final MeichenAgentHandler meichenHandler = new MeichenAgentHandler(null);
 
     @Test

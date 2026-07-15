@@ -3,12 +3,19 @@ from __future__ import annotations
 import asyncio
 import json
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from typing import AsyncIterator
 
 import httpx
 
 from app.core.config import settings
 from app.services.call_logger import log_ai_call
+
+
+@dataclass
+class LLMResponse:
+    content: str = ""
+    tool_calls: list[dict] = field(default_factory=list)
 
 
 class LLMProvider(ABC):
@@ -30,6 +37,17 @@ class LLMProvider(ABC):
         temperature: float = 0.7,
     ) -> AsyncIterator[str]:
         raise NotImplementedError
+
+    async def chat(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        tools: list[dict] | None = None,
+        temperature: float = 0.7,
+    ) -> LLMResponse:
+        """Optional tool-aware chat. Default implementation falls back to complete()."""
+        text = await self.complete(system_prompt, user_prompt, json_mode=False, temperature=temperature)
+        return LLMResponse(content=text)
 
 
 class OllamaProvider(LLMProvider):
@@ -189,6 +207,38 @@ class ZhipuProvider(LLMProvider):
             raise last_exception
         return ""
 
+    @log_ai_call("llm", "zhipu")
+    async def chat(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        tools: list[dict] | None = None,
+        temperature: float = 0.7,
+    ) -> LLMResponse:
+        payload: dict = {
+            "model": self.model,
+            "messages": self._build_messages(system_prompt, user_prompt),
+            "stream": False,
+            "temperature": temperature,
+        }
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
+
+        resp = await self.client.post(
+            f"{self.base_url}/chat/completions",
+            json=payload,
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            timeout=180.0,
+        )
+        print(f"DEBUG: Zhipu chat response status: {resp.status_code}")
+        resp.raise_for_status()
+        data = resp.json()
+        message = data.get("choices", [{}])[0].get("message", {})
+        content = message.get("content") or ""
+        tool_calls = message.get("tool_calls") or []
+        return LLMResponse(content=content, tool_calls=tool_calls)
+
     async def stream(
         self,
         system_prompt: str,
@@ -258,7 +308,17 @@ class LLMClient:
         async for chunk in self.primary_provider.stream(system_prompt, user_prompt, temperature):
             if chunk:
                 yield chunk
-                return
+
+    async def chat(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        tools: list[dict] | None = None,
+        temperature: float = 0.7,
+    ) -> LLMResponse:
+        return await self.primary_provider.chat(
+            system_prompt, user_prompt, tools, temperature
+        )
 
 
 llm_client = LLMClient()

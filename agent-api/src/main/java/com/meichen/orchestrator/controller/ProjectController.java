@@ -10,6 +10,7 @@ import com.meichen.orchestrator.service.ThinkingLogService;
 import com.meichen.orchestrator.service.WorkflowService;
 import com.meichen.orchestrator.security.CurrentUser;
 import com.meichen.orchestrator.dispatcher.AgentDispatcher;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -17,6 +18,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.*;
+import java.util.concurrent.Executor;
 
 @RestController
 @RequestMapping("/api/v1/projects")
@@ -29,6 +31,7 @@ public class ProjectController {
     private final DialogueService dialogueService;
     private final ObjectMapper objectMapper;
     private final AgentDispatcher agentDispatcher;
+    private final Executor dialogueExecutor;
 
     public ProjectController(WorkflowService workflowService,
                              ProjectRepository projectRepository,
@@ -36,7 +39,8 @@ public class ProjectController {
                              ThinkingLogService thinkingLogService,
                              DialogueService dialogueService,
                              ObjectMapper objectMapper,
-                             AgentDispatcher agentDispatcher) {
+                             AgentDispatcher agentDispatcher,
+                             @Qualifier("dialogueExecutor") Executor dialogueExecutor) {
         this.workflowService = workflowService;
         this.projectRepository = projectRepository;
         this.sessionMessageService = sessionMessageService;
@@ -44,6 +48,7 @@ public class ProjectController {
         this.dialogueService = dialogueService;
         this.objectMapper = objectMapper;
         this.agentDispatcher = agentDispatcher;
+        this.dialogueExecutor = dialogueExecutor;
     }
 
     @GetMapping
@@ -241,7 +246,9 @@ public class ProjectController {
                 workflowService.startWorkflow(projectId, "L3", userId);
             }
         } else {
-            agentDispatcher.dispatch(project).handle(project, msg);
+            // Run generic agent asynchronously so the HTTP response returns immediately
+            // and the assistant reply is streamed to the client via SSE.
+            dialogueExecutor.execute(() -> agentDispatcher.dispatch(project).handle(project, msg));
         }
 
         return ResponseEntity.ok(msg);
