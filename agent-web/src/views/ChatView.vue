@@ -137,7 +137,7 @@
                   <div class="tool-header">
                     <span class="tool-icon">🔍</span>
                     <span class="tool-name">{{ toolDisplay(msg).toolName }}</span>
-                    <span class="tool-status running">{{ getToolStatusLabel(toolDisplay(msg).status) }}</span>
+                    <span :class="['tool-status', toolDisplay(msg).status === 'done' ? 'done' : 'running']">{{ getToolStatusLabel(toolDisplay(msg).status) }}</span>
                   </div>
                   <div v-if="toolDisplay(msg).toolArguments && toolDisplay(msg).toolArguments.query" class="tool-query">
                     查询：{{ toolDisplay(msg).toolArguments.query }}

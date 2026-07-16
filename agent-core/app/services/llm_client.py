@@ -49,6 +49,23 @@ class LLMProvider(ABC):
         text = await self.complete(system_prompt, user_prompt, json_mode=False, temperature=temperature)
         return LLMResponse(content=text)
 
+    async def chat_complete(
+        self,
+        messages: list[dict],
+        json_mode: bool = False,
+        temperature: float = 0.7,
+    ) -> str:
+        """给定完整 messages 列表完成一次对话。默认实现取首条 system 与首个 user 消息回退到 complete()。"""
+        system_prompt = ""
+        user_prompt = ""
+        for msg in messages:
+            if msg.get("role") == "system":
+                system_prompt = msg.get("content", "")
+            elif msg.get("role") == "user":
+                user_prompt = msg.get("content", "")
+                break
+        return await self.complete(system_prompt, user_prompt, json_mode=json_mode, temperature=temperature)
+
 
 class OllamaProvider(LLMProvider):
     def __init__(self, base_url: str = settings.ollama_base_url, model: str = settings.ollama_text_model):
@@ -121,6 +138,33 @@ class OllamaProvider(LLMProvider):
                         break
                 except json.JSONDecodeError:
                     continue
+
+    async def chat_complete(
+        self,
+        messages: list[dict],
+        json_mode: bool = False,
+        temperature: float = 0.7,
+    ) -> str:
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "stream": False,
+            "options": {"temperature": temperature},
+            "keep_alive": "10m",
+        }
+        if json_mode:
+            payload["format"] = "json"
+
+        try:
+            resp = await self.client.post(
+                f"{self.base_url}/api/chat", json=payload, timeout=300.0
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("message", {}).get("content", "")
+        except Exception as e:
+            print(f"LLM chat_complete error: {type(e).__name__}: {e}")
+            return ""
 
 
 class ZhipuProvider(LLMProvider):
@@ -239,6 +283,67 @@ class ZhipuProvider(LLMProvider):
         tool_calls = message.get("tool_calls") or []
         return LLMResponse(content=content, tool_calls=tool_calls)
 
+    @log_ai_call("llm", "zhipu")
+    async def chat_complete(
+        self,
+        messages: list[dict],
+        json_mode: bool = False,
+        temperature: float = 0.7,
+    ) -> str:
+        payload: dict = {
+            "model": self.model,
+            "messages": messages,
+            "stream": False,
+            "temperature": temperature,
+        }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
+
+        max_retries = 3
+        backoff_factor = 1.0
+        last_exception: Exception | None = None
+
+        for attempt in range(max_retries + 1):
+            try:
+                resp = await self.client.post(
+                    f"{self.base_url}/chat/completions",
+                    json=payload,
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    timeout=180.0,
+                )
+                print(f"DEBUG: Zhipu chat_complete response status: {resp.status_code}")
+                resp.raise_for_status()
+                data = resp.json()
+                usage = data.get("usage", {})
+                self._last_usage = usage
+                return data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            except httpx.HTTPStatusError as e:
+                last_exception = e
+                status_code = e.response.status_code
+                print(f"Zhipu HTTP error: {status_code} - {e.response.text[:300]}")
+                if status_code == 429 and attempt < max_retries:
+                    wait = backoff_factor * (2 ** attempt)
+                    print(f"Zhipu rate limited; retrying in {wait}s (attempt {attempt + 1}/{max_retries})")
+                    await asyncio.sleep(wait)
+                    continue
+                raise
+            except httpx.TimeoutException as e:
+                last_exception = e
+                print(f"Zhipu timeout: {e}")
+                if attempt < max_retries:
+                    wait = backoff_factor * (2 ** attempt)
+                    print(f"Zhipu timeout; retrying in {wait}s (attempt {attempt + 1}/{max_retries})")
+                    await asyncio.sleep(wait)
+                    continue
+                raise
+            except Exception as e:
+                print(f"Zhipu chat_complete failed: {type(e).__name__}: {e}")
+                raise
+
+        if last_exception:
+            raise last_exception
+        return ""
+
     async def stream(
         self,
         system_prompt: str,
@@ -318,6 +423,16 @@ class LLMClient:
     ) -> LLMResponse:
         return await self.primary_provider.chat(
             system_prompt, user_prompt, tools, temperature
+        )
+
+    async def chat_complete(
+        self,
+        messages: list[dict],
+        json_mode: bool = False,
+        temperature: float = 0.7,
+    ) -> str:
+        return await self.primary_provider.chat_complete(
+            messages, json_mode, temperature
         )
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+from typing import Any
 
 from fastapi import APIRouter, Body
 from fastapi.responses import StreamingResponse
@@ -283,12 +284,26 @@ WEB_SEARCH_TOOL_SCHEMA = {
 }
 
 
-async def _generic_run_stream(user_input: str):
+async def _generic_run_stream(
+    conversation_id: str,
+    user_input: str,
+    agent_type: str,
+    context_json: str | None = None,
+):
     import logging
 
     log = logging.getLogger(__name__)
     client = LLMClient()
     web_search = WebSearchTool()
+
+    working_memory: dict[str, Any] = {}
+    if context_json:
+        try:
+            parsed = json.loads(context_json)
+            if isinstance(parsed, dict):
+                working_memory.update(parsed)
+        except json.JSONDecodeError:
+            log.warning("Invalid contextJson: %s", context_json)
 
     system_prompt = (
         "你是美陈设计平台的通用 AI 助手，能够调用 web_search 工具查询互联网获取最新信息。\n"
@@ -344,9 +359,9 @@ async def _generic_run_stream(user_input: str):
                         result = await web_search.execute(
                             _arguments,
                             ToolContext(
-                                conversation_id="generic",
-                                agent_type="generic",
-                                working_memory={},
+                                conversation_id=conversation_id,
+                                agent_type=agent_type,
+                                working_memory=working_memory,
                                 emit=emit,
                                 tool_call_id=_id,
                             ),
@@ -382,24 +397,15 @@ async def _generic_run_stream(user_input: str):
                 })
 
             # 3. Generate final answer with tool results
-            final_payload = {
-                "model": client.primary_provider.model if hasattr(client.primary_provider, "model") else "glm-4.7-flash",
-                "messages": messages,
-                "stream": False,
-                "temperature": 0.7,
-            }
-            final_resp = await client.primary_provider.client.post(
-                f"{client.primary_provider.base_url}/chat/completions",
-                json=final_payload,
-                headers={"Authorization": f"Bearer {client.primary_provider.api_key}"},
-                timeout=180.0,
-            )
-            final_resp.raise_for_status()
-            answer = final_resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+            try:
+                answer = await client.chat_complete(messages, temperature=0.7)
+            except Exception as e:
+                log.error("Final answer generation failed: %s", e, exc_info=True)
+                answer = "已为您完成搜索，但生成最终回答时出错，请稍后重试。"
             answer = re.sub(r"<tool_call>[\s\S]*?</tool_call>", "", answer).strip()
             if not answer:
                 answer = "已为您完成搜索，但未生成有效回答。"
-            for chunk in _chunk_text(answer, chunk_size=1):
+            for chunk in _chunk_text(answer, chunk_size=20):
                 yield f"event: text_delta\ndata: {json.dumps({'delta': chunk}, ensure_ascii=False)}\n\n"
         else:
             # No tool call needed; stream the answer directly
@@ -420,14 +426,26 @@ async def _generic_run_stream(user_input: str):
     yield "event: done\ndata: {}\n\n"
 
 
+async def _not_implemented_stream(agent_id: str):
+    error_msg = f"Agent '{agent_id}' 暂不支持，请使用 generic  agent。"
+    for chunk in _chunk_text(error_msg, chunk_size=20):
+        yield f"event: text_delta\ndata: {json.dumps({'delta': chunk}, ensure_ascii=False)}\n\n"
+    yield "event: done\ndata: {}\n\n"
+
+
 @router.post("/agents/{agent_id}/run")
 async def run_agent(agent_id: str, req: AgentRunRequest):
     if agent_id == "generic":
         return StreamingResponse(
-            _generic_run_stream(req.userInput),
+            _generic_run_stream(
+                req.conversationId,
+                req.userInput,
+                agent_id,
+                req.contextJson,
+            ),
             media_type="text/event-stream",
         )
     return StreamingResponse(
-        _generic_run_stream(req.userInput),
+        _not_implemented_stream(agent_id),
         media_type="text/event-stream",
     )
